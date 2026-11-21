@@ -178,6 +178,9 @@ void writer_state::lcd_w(offs_t offset, uint8_t data)
 {
 	unsigned ctrl = BIT(offset, 1);
 	bool rs = BIT(offset, 0);
+	if (rs)
+		logerror("LCDDATA ctrl=%u data=%02X ('%c') PC=%04X\n", ctrl, data,
+			(data >= 0x20 && data < 0x7f) ? data : '.', m_maincpu->pc());
 	m_lcdc[ctrl]->write(rs, data);
 }
 

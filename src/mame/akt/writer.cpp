@@ -34,11 +34,15 @@
       - 23BC: row2/col6 + row2/col8 + row6/col6
     Physical keycap names for each (row,col) still to be mapped.
 
+    CONFIRMED by live trace (writerdiag build, real run):
+      - RAM is physically resident at C0000-CDFFF (heavy MEMWR activity there).
+      - LCD: two KS0066 controllers, both written in parallel at I/O ports
+        00C0 (RS=0, instruction/busy) and 00C2 (RS=1, data), same split as
+        alphasma.cpp's update_lcdc/lcd_ctrl_w.
+
     TODO (pending firmware analysis, no data invented here):
-      - physical location of the 256 KiB RAM / external banking
-      - I/O ports for both LCD controllers
       - map matrix (row,col) positions to physical keys
-      - PIC microcontroller role (ASCI serial, ports 00-09h)
+      - PIC microcontroller role / protocol on ASCI1
 
 ***************************************************************************/
 
@@ -87,6 +91,8 @@ private:
 	uint8_t kb_sense_hi_r() { return kb_sense() >> 8; }
 	uint8_t ext_io_r(offs_t offset);
 	void ext_io_w(offs_t offset, uint8_t data);
+	uint8_t lcd_r(offs_t offset);
+	void lcd_w(offs_t offset, uint8_t data);
 	void report_writes();
 	virtual void machine_reset() override ATTR_COLD;
 
@@ -112,6 +118,9 @@ void writer_state::map_io(address_map &map)
 	map(0x0040, 0x0040).w(FUNC(writer_state::kb_strobe_w));   // row strobe (74HC374)
 	map(0x0080, 0x0080).r(FUNC(writer_state::kb_sense_lo_r)); // columns 0-7  (74VHC244 #1)
 	map(0x0082, 0x0082).r(FUNC(writer_state::kb_sense_hi_r)); // columns 8-15 (74VHC244 #2)
+	// LCD (confirmed, live trace): two KS0066 controllers at 00C0/00C2, same
+	// RS/E wiring pattern as alphasma.cpp's update_lcdc/lcd_ctrl_w.
+	map(0x00c0, 0x00c3).rw(FUNC(writer_state::lcd_r), FUNC(writer_state::lcd_w));
 }
 
 uint16_t writer_state::kb_sense()
@@ -144,6 +153,23 @@ uint8_t writer_state::ext_io_r(offs_t offset)
 void writer_state::ext_io_w(offs_t offset, uint8_t data)
 {
 	logerror("IOWR %04X = %02X PC=%04X\n", offset + 0x40, data, m_maincpu->pc());
+}
+
+// LCD at 00C0/00C2 (confirmed by live trace: standard HD44780/KS0066 init
+// sequence seen on both ports). Each port drives both controllers' data bus
+// in parallel; RS is selected by the port (00C0 = instruction, 00C2 = data),
+// same split alphasma.cpp makes via a bit of its matrix latch.
+uint8_t writer_state::lcd_r(offs_t offset)
+{
+	bool rs = BIT(offset, 1); // 00C0 -> rs=0 (instruction/busy), 00C2 -> rs=1 (data)
+	return m_lcdc[0]->read(rs);
+}
+
+void writer_state::lcd_w(offs_t offset, uint8_t data)
+{
+	bool rs = BIT(offset, 1);
+	m_lcdc[0]->write(rs, data);
+	m_lcdc[1]->write(rs, data);
 }
 
 void writer_state::report_writes()

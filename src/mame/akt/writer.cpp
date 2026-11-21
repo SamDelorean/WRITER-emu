@@ -25,11 +25,20 @@
     from the ROM, so the firmware can run while we log where it writes
     (= where the real RAM must be) and which external I/O ports it uses.
 
+    Keyboard (confirmed, routine 0CF6): direct matrix scanned by the Z180.
+      - OUT (0040h) = one-hot row strobe (80h,40h,...,01h) via 74HC374
+      - IN  (0080h) = sense columns 0-7  (74VHC244 #1), pressed = 1
+      - IN  (0082h) = sense columns 8-15 (74VHC244 #2)
+    Master-reset key combos (held at power-on, checked before the memory test):
+      - 23AC: row2/col6 + row6/col6
+      - 23BC: row2/col6 + row2/col8 + row6/col6
+    Physical keycap names for each (row,col) still to be mapped.
+
     TODO (pending firmware analysis, no data invented here):
       - physical location of the 256 KiB RAM / external banking
       - I/O ports for both LCD controllers
-      - keyboard matrix
-      - PIC microcontroller role
+      - map matrix (row,col) positions to physical keys
+      - PIC microcontroller role (ASCI serial, ports 00-09h)
 
 ***************************************************************************/
 
@@ -52,6 +61,7 @@ public:
 		, m_maincpu(*this, "maincpu")
 		, m_lcdc(*this, "ks0066_%u", 0U)
 		, m_rom(*this, "maincpu")
+		, m_kb(*this, "ROW%u", 0U)
 	{ }
 
 	void writer(machine_config &config);
@@ -64,11 +74,17 @@ private:
 	required_device_array<ks0066_device, 2> m_lcdc;
 	std::unique_ptr<bitmap_ind16> m_tmp_bitmap;
 	required_region_ptr<uint8_t> m_rom;
+	required_ioport_array<8> m_kb;
 	std::unique_ptr<uint8_t[]> m_mem;
 	uint32_t m_wr_pages[256] = { };
+	uint8_t m_kb_strobe = 0;
 
 	uint8_t mem_r(offs_t offset) { return m_mem[offset]; }
 	void mem_w(offs_t offset, uint8_t data);
+	uint16_t kb_sense();
+	void kb_strobe_w(uint8_t data) { m_kb_strobe = data; }
+	uint8_t kb_sense_lo_r() { return kb_sense() & 0xff; }
+	uint8_t kb_sense_hi_r() { return kb_sense() >> 8; }
 	uint8_t ext_io_r(offs_t offset);
 	void ext_io_w(offs_t offset, uint8_t data);
 	void report_writes();
@@ -91,7 +107,21 @@ void writer_state::map_io(address_map &map)
 {
 	map.global_mask(0xffff);
 	map(0x0000, 0x003f).noprw(); // Z180 internal registers (handled by the CPU core)
-	map(0x0040, 0xffff).rw(FUNC(writer_state::ext_io_r), FUNC(writer_state::ext_io_w)); // DIAGNOSTIC: log all external ports
+	map(0x0040, 0xffff).rw(FUNC(writer_state::ext_io_r), FUNC(writer_state::ext_io_w)); // DIAGNOSTIC: log all other external ports
+	// Keyboard matrix (confirmed, routine 0CF6) overrides the logging handlers:
+	map(0x0040, 0x0040).w(FUNC(writer_state::kb_strobe_w));   // row strobe (74HC374)
+	map(0x0080, 0x0080).r(FUNC(writer_state::kb_sense_lo_r)); // columns 0-7  (74VHC244 #1)
+	map(0x0082, 0x0082).r(FUNC(writer_state::kb_sense_hi_r)); // columns 8-15 (74VHC244 #2)
+}
+
+uint16_t writer_state::kb_sense()
+{
+	// m_kb_strobe is one-hot: bit7 -> ROW0, bit6 -> ROW1, ... bit0 -> ROW7
+	uint16_t v = 0;
+	for (int i = 0; i < 8; i++)
+		if (BIT(m_kb_strobe, 7 - i))
+			v |= m_kb[i]->read();
+	return v;
 }
 
 void writer_state::mem_w(offs_t offset, uint8_t data)
@@ -155,8 +185,21 @@ void writer_state::machine_reset()
 }
 
 
+// Matrix is active-high (pressed = 1). Undefined bits read 0.
+// Only the keys needed to reach the master-reset screen are mapped so far;
+// the remaining (row,col) positions still need their physical keycaps identified.
 static INPUT_PORTS_START( writer )
-	// TODO: keyboard matrix
+	PORT_START("ROW0")
+	PORT_START("ROW1")
+	PORT_START("ROW2")
+	PORT_BIT(0x0040, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("MR key 1 (row2,col6)")  PORT_CODE(KEYCODE_F1)
+	PORT_BIT(0x0100, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("MR key 3 (row2,col8)")  PORT_CODE(KEYCODE_F3)
+	PORT_START("ROW3")
+	PORT_START("ROW4")
+	PORT_START("ROW5")
+	PORT_START("ROW6")
+	PORT_BIT(0x0040, IP_ACTIVE_HIGH, IPT_KEYBOARD) PORT_NAME("MR key 2 (row6,col6)")  PORT_CODE(KEYCODE_F2)
+	PORT_START("ROW7")
 INPUT_PORTS_END
 
 

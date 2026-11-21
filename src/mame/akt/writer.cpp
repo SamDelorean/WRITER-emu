@@ -162,12 +162,15 @@ void writer_state::ext_io_w(offs_t offset, uint8_t data)
 uint8_t writer_state::lcd_r(offs_t offset)
 {
 	bool rs = BIT(offset, 1); // 00C0 -> rs=0 (instruction/busy), 00C2 -> rs=1 (data)
+	if (!machine().side_effects_disabled())
+		logerror("LCDRD %04X PC=%04X\n", offset + 0xc0, m_maincpu->pc());
 	return m_lcdc[0]->read(rs);
 }
 
 void writer_state::lcd_w(offs_t offset, uint8_t data)
 {
 	bool rs = BIT(offset, 1);
+	logerror("LCDWR %04X = %02X PC=%04X\n", offset + 0xc0, data, m_maincpu->pc());
 	m_lcdc[0]->write(rs, data);
 	m_lcdc[1]->write(rs, data);
 }

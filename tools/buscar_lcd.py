@@ -24,12 +24,12 @@ rom = open(sys.argv[1], 'rb').read()
 mem = lambda a: rom[a & 0xFFFF]
 
 def dis_range(lo, hi):
-    out = []
+    out = {}
     x = lo
     while x < hi:
-        n, t, fl, _ = Z.decode(mem, x)
-        raw = ' '.join(f'{mem(x+i):02X}' for i in range(n))
-        out.append((x, n, raw, t, fl))
+        ins = Z.decode(mem, x)
+        n = ins[0]
+        out[x] = ins
         x += n
     return out
 
@@ -43,7 +43,7 @@ traced = Z.trace(mem, entries, lo=0, hi=0xFFFF)
 # Also do a plain linear sweep over the whole addressable ROM window actually
 # used by code (0000-3FFF covers all routines referenced in prior findings)
 # to catch anything the recursive trace missed (data embedded as code refs).
-linear = dict(dis_range(0x0000, 0x4000))
+linear = dis_range(0x0000, 0x4000)
 
 all_instr = {}
 all_instr.update(linear)

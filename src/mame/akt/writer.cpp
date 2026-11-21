@@ -34,11 +34,13 @@
       - 23BC: row2/col6 + row2/col8 + row6/col6
     Physical keycap names for each (row,col) still to be mapped.
 
-    CONFIRMED by live trace (writerdiag build, real run):
+    CONFIRMED by live trace + code at 07C6-088C (CGRAM-define routine):
       - RAM is physically resident at C0000-CDFFF (heavy MEMWR activity there).
-      - LCD: two KS0066 controllers, both written in parallel at I/O ports
-        00C0 (RS=0, instruction/busy) and 00C2 (RS=1, data), same split as
-        alphasma.cpp's update_lcdc/lcd_ctrl_w.
+      - LCD: two independent KS0066 controllers, classic two-register scheme,
+        RS = low address bit (A0), controller select = next bit:
+          00C0/00C1 = controller 0 instruction/data
+          00C2/00C3 = controller 1 instruction/data
+        (not a port-pair broadcast to both, as first assumed).
 
     TODO (pending firmware analysis, no data invented here):
       - map matrix (row,col) positions to physical keys
@@ -155,24 +157,28 @@ void writer_state::ext_io_w(offs_t offset, uint8_t data)
 	logerror("IOWR %04X = %02X PC=%04X\n", offset + 0x40, data, m_maincpu->pc());
 }
 
-// LCD at 00C0/00C2 (confirmed by live trace: standard HD44780/KS0066 init
-// sequence seen on both ports). Each port drives both controllers' data bus
-// in parallel; RS is selected by the port (00C0 = instruction, 00C2 = data),
-// same split alphasma.cpp makes via a bit of its matrix latch.
+// LCD at 00C0-00C3 (confirmed by code at 07C6-088C, routine that defines a
+// CGRAM character): standard HD44780 two-register scheme where RS is the
+// low address bit (A0) and the two controllers sit at consecutive even
+// bases, NOT a port-pair broadcast to both:
+//   00C0 = controller 0, instruction/busy (RS=0)
+//   00C1 = controller 0, data            (RS=1)
+//   00C2 = controller 1, instruction/busy (RS=0)
+//   00C3 = controller 1, data            (RS=1)
+// (CALL 07CAh writes the even/command port as-is; CALL 07CEh does
+//  INC BC; OUT (C),A; DEC BC, i.e. writes to base+1 = the data port.)
 uint8_t writer_state::lcd_r(offs_t offset)
 {
-	bool rs = BIT(offset, 1); // 00C0 -> rs=0 (instruction/busy), 00C2 -> rs=1 (data)
-	if (!machine().side_effects_disabled())
-		logerror("LCDRD %04X PC=%04X\n", offset + 0xc0, m_maincpu->pc());
-	return m_lcdc[0]->read(rs);
+	unsigned ctrl = BIT(offset, 1);
+	bool rs = BIT(offset, 0);
+	return m_lcdc[ctrl]->read(rs);
 }
 
 void writer_state::lcd_w(offs_t offset, uint8_t data)
 {
-	bool rs = BIT(offset, 1);
-	logerror("LCDWR %04X = %02X PC=%04X\n", offset + 0xc0, data, m_maincpu->pc());
-	m_lcdc[0]->write(rs, data);
-	m_lcdc[1]->write(rs, data);
+	unsigned ctrl = BIT(offset, 1);
+	bool rs = BIT(offset, 0);
+	m_lcdc[ctrl]->write(rs, data);
 }
 
 void writer_state::report_writes()

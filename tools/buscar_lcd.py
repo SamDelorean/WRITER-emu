@@ -37,13 +37,14 @@ def dis_range(lo, hi):
 #    known MMU-setup/reset code (0x23EC area) and the whole low ROM, to get
 #    a full instruction list covering most of the firmware (same approach
 #    as previous scripts: linear sweep + flow-based trace merged).
-entries = [0x0000, 0x0150, 0x0CF6, 0x1AC5, 0x23EC, 0x2400]
+entries = [0x0000, 0x0150, 0x046B, 0x0769, 0x078F, 0x0CF6, 0x1AC5,
+           0x23EC, 0x2400, 0x24EB, 0x2570, 0x2682, 0x0E08]
 traced = Z.trace(mem, entries, lo=0, hi=0xFFFF)
 
 # Also do a plain linear sweep over the whole addressable ROM window actually
 # used by code (0000-3FFF covers all routines referenced in prior findings)
 # to catch anything the recursive trace missed (data embedded as code refs).
-linear = dis_range(0x0000, 0x4000)
+linear = dis_range(0x0000, 0xFFFF)
 
 all_instr = {}
 all_instr.update(linear)

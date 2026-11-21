@@ -41,7 +41,7 @@ inits = {}
 x = 0
 while x < 0xFFF0:
     n, t, _, _ = Z.decode(mem, x)
-    m = re.match(r'OUT0 \(0x([0-9a-f]+)h?\),A', t)
+    m = re.match(r'OUT0 \(([0-9A-Fa-f]{1,2})h\),A', t)
     if m:
         p = int(m.group(1), 16)
         if p in ASCI:
@@ -64,7 +64,7 @@ while x < 0xFFF0:
     n, t, _, _ = Z.decode(mem, x)
     for reg in ('TDR0', 'TDR1', 'RDR0', 'RDR1'):
         pnum = [k for k, v in ASCI.items() if v == reg][0]
-        if re.search(rf'\(0x0?{pnum:x}h?\)', t) and ('IN0' in t or 'OUT0' in t):
+        if f'({pnum:02X}h)' in t and ('IN0' in t or 'OUT0' in t):
             print(f"  {x:04X}  {t}   ; {reg}")
     x += n
 

@@ -52,16 +52,16 @@ for addr in keys:
 print(f"Total indirectos encontrados: {len(indirect)}")
 print()
 
-print("=== Tabla cruda 0140h-01A0h como punteros de 16 bits (little endian) ===")
+print("=== Tabla de vectores 0140h-0260h: entradas 'C3 lo hi FF' (JP nnnn, alineado a 4) ===")
 candidates = []
-for a in range(0x0140, 0x01A0, 2):
-    lo, hi = mem(a), mem(a + 1)
-    ptr = lo | (hi << 8)
-    flag = ''
-    if 0x0000 <= ptr <= 0x9FFF:
-        candidates.append(ptr)
-        flag = '  <- en rango de codigo, se añade como entrada'
-    print(f"{a:04X}: {lo:02X} {hi:02X} -> {ptr:04X}{flag}")
+for a in range(0x0140, 0x0260, 4):
+    op, lo, hi, pad = mem(a), mem(a+1), mem(a+2), mem(a+3)
+    if op != 0xC3:
+        print(f"{a:04X}: {op:02X} {lo:02X} {hi:02X} {pad:02X}  (no es C3, fin de tabla probable)")
+        continue
+    target = lo | (hi << 8)
+    candidates.append(target)
+    print(f"{a:04X}: JP {target:04X}h  (pad={pad:02X})")
 print()
 
 print("=== Re-traza incluyendo los punteros de la tabla como nuevas entradas ===")

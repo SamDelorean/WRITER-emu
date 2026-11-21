@@ -189,6 +189,17 @@ void writer_state::report_writes()
 	for (int i = 0; i < 256; i++)
 		if (m_wr_pages[i])
 			logerror("  %05X-%05X : %u writes\n", i << 12, (i << 12) | 0xfff, m_wr_pages[i]);
+
+	// Final CPU/RAM snapshot for RE: where did execution park, and what do the
+	// boot-flow variables hold (D000/D002 RAM signatures, D011/D013 PIC bytes,
+	// D0AD/D08D used by 0CBE, D073 tick flag set by the RST 38h ISR).
+	uint16_t pc = m_maincpu->pc();
+	uint16_t sp = m_maincpu->state_int(Z180_SP);
+	auto rd16 = [this](uint32_t a) { return m_mem[a] | (m_mem[a + 1] << 8); };
+	// logical Dxxx -> physical 0xC0000 + Dxxx (CBAR=F0/CBR=C0/BBR=C0 per RE notes)
+	logerror("FINAL PC=%04X SP=%04X D000=%04X D002=%04X D011=%04X D013=%04X D0AD=%04X D073=%02X\n",
+		pc, sp, rd16(0xcd000), rd16(0xcd002), rd16(0xcd011),
+		rd16(0xcd013), rd16(0xcd0ad), m_mem[0xcd073]);
 }
 
 

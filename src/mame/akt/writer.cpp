@@ -54,6 +54,7 @@
 #include "video/hd44780.h"
 
 #include "emupal.h"
+#include "machine/timer.h"
 #include "screen.h"
 
 
@@ -96,6 +97,7 @@ private:
 	uint8_t lcd_r(offs_t offset);
 	void lcd_w(offs_t offset, uint8_t data);
 	void report_writes();
+	TIMER_DEVICE_CALLBACK_MEMBER(d017_tick);
 	virtual void machine_reset() override ATTR_COLD;
 
 	void map_program(address_map &map) ATTR_COLD;
@@ -183,6 +185,28 @@ void writer_state::lcd_w(offs_t offset, uint8_t data)
 	m_lcdc[ctrl]->write(rs, data);
 }
 
+// STUB, NOT a reconstruction of the real PIC protocol: the Z180 core in this
+// MAME tree has no ASCI1 receive simulation at all (no code anywhere sets
+// RDR1/STAT1's RDRF bit), and nothing increments the RAM variable at D017
+// that routine 062F (read-ASCI1-byte-with-timeout) uses as its elapsed-time
+// counter to give up and return 0 when no byte arrives. Confirmed by a final
+// state dump: PC parks forever inside 062F's wait loop with D017 and D073
+// (the generic interrupt-flag byte) stuck at their boot-time values. Without
+// *some* source of elapsed time, every call to 062F after the first few
+// (which apparently resolve before this timer starts mattering) hangs
+// forever, and the firmware never reaches any text-printing code.
+// This timer only advances that one RAM counter, at an arbitrary rate, so
+// the firmware's own documented "nothing answered -> proceed with zeros"
+// behavior (D011/D013 already 0000 at boot) can run its course. It does not
+// supply any PIC byte value, timing, or protocol semantics.
+TIMER_DEVICE_CALLBACK_MEMBER(writer_state::d017_tick)
+{
+	uint16_t v = m_mem[0xcd017] | (m_mem[0xcd018] << 8);
+	v++;
+	m_mem[0xcd017] = v & 0xff;
+	m_mem[0xcd018] = v >> 8;
+}
+
 void writer_state::report_writes()
 {
 	logerror("MEMWR summary (4 KiB pages with writes):\n");
@@ -256,6 +280,10 @@ void writer_state::writer(machine_config &config)
 	Z8S180(config, m_maincpu, 6'144'000); // crystal Y2 ECS 6.144 MHz; CCR/CMR set by firmware
 	m_maincpu->set_addrmap(AS_PROGRAM, &writer_state::map_program);
 	m_maincpu->set_addrmap(AS_IO, &writer_state::map_io);
+
+	// STUB tick for D017 (see d017_tick comment above) - arbitrary rate,
+	// just fast enough that 062F's timeout resolves promptly in our runs.
+	TIMER(config, "d017_tick").configure_periodic(FUNC(writer_state::d017_tick), attotime::from_hz(1000));
 
 	for (auto &lcdc : m_lcdc)
 	{

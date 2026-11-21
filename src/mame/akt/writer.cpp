@@ -44,13 +44,34 @@
 
     TODO (pending firmware analysis, no data invented here):
       - map matrix (row,col) positions to physical keys
-      - PIC microcontroller role / protocol on ASCI1
+
+    PIC (U11), confirmed by a physical dump of the real chip (Arduino +
+    Willem programmer, DS30190 verify-mode protocol, 3 identical reads):
+    PIC16C54C-04I/P, CONFIG=0xFFC (CP=1 unprotected, WDTE=1, FOSC=LP ->
+    confirms the 32.768 kHz crystal Y1). 227 real words at 0x000-0x0E2,
+    rest blank; reset vector 0x1FF -> GOTO 0x074.
+
+    Disassembly of the real dump shows the PIC is NOT a passive slave: it
+    runs a free loop keeping its own 40-bit software tick counter (bytes
+    0x08-0x0B + 0x0C), and on a PORTB handshake condition it bit-bangs
+    that 4-byte counter out serially on PORTB,0 (-> Z180 ASCI1 RX). It also
+    drives TMR0 from an external clock on T0CKI/RA2 (OPTION=0x20) and
+    pulses RA2 to scan the keyboard. Full details + address-by-address
+    disassembly: confidential doc WRITER_RE_05_PIC_desensamblado_real.
+
+    This build adds the REAL pic16c5x core (MAME's own PIC16C54 device,
+    src/devices/cpu/pic16c5x) running the real dump, wired only to logging
+    callbacks for now (PORTA/PORTB writes). It is NOT yet bit-level wired
+    to the Z180's ASCI1 RX pin - that is the next RE step. The D017 tick
+    stub (see d017_tick below) stays in place as the firmware-side
+    fallback while that real serial link isn't connected.
 
 ***************************************************************************/
 
 #include "emu.h"
 
 #include "cpu/z180/z180.h"
+#include "cpu/pic16c5x/pic16c5x.h"
 #include "video/hd44780.h"
 
 #include "emupal.h"
@@ -66,6 +87,7 @@ public:
 	writer_state(const machine_config &mconfig, device_type type, const char *tag)
 		: driver_device(mconfig, type, tag)
 		, m_maincpu(*this, "maincpu")
+		, m_piccpu(*this, "piccpu")
 		, m_lcdc(*this, "ks0066_%u", 0U)
 		, m_rom(*this, "maincpu")
 		, m_kb(*this, "ROW%u", 0U)
@@ -78,6 +100,7 @@ protected:
 
 private:
 	required_device<z8s180_device> m_maincpu;
+	required_device<pic16c54_device> m_piccpu;
 	required_device_array<ks0066_device, 2> m_lcdc;
 	std::unique_ptr<bitmap_ind16> m_tmp_bitmap;
 	required_region_ptr<uint8_t> m_rom;
@@ -99,6 +122,11 @@ private:
 	void report_writes();
 	TIMER_DEVICE_CALLBACK_MEMBER(d017_tick);
 	virtual void machine_reset() override ATTR_COLD;
+
+	// REAL PIC16C54C (U11), RE-only logging for now (see header comment).
+	uint8_t pic_porta_r() { return 0x00; } // TODO: real handshake lines, not wired yet
+	void pic_porta_w(uint8_t data) { logerror("PIC PORTA=%02X\n", data); }
+	void pic_portb_w(uint8_t data) { logerror("PIC PORTB=%02X (TX bit0=%u)\n", data, BIT(data, 0)); }
 
 	void map_program(address_map &map) ATTR_COLD;
 	void map_io(address_map &map) ATTR_COLD;
@@ -300,12 +328,28 @@ void writer_state::writer(machine_config &config)
 	screen.set_palette("palette");
 
 	PALETTE(config, "palette", FUNC(writer_state::palette_init), 2);
+
+	// REAL PIC16C54C (U11), crystal Y1 32.768 kHz (confirmed: CONFIG FOSC=LP
+	// in the real dump). RE-only wiring for now - see header comment and
+	// pic_porta_r/pic_porta_w/pic_portb_w above: not yet bit-level linked to
+	// the Z180's ASCI1 RX line.
+	PIC16C54(config, m_piccpu, 32'768);
+	m_piccpu->set_config(0xffc); // real CONFIG word from the physical dump: CP=1, WDTE=1, FOSC=LP
+	m_piccpu->read_a().set(FUNC(writer_state::pic_porta_r));
+	m_piccpu->write_a().set(FUNC(writer_state::pic_porta_w));
+	m_piccpu->write_b().set(FUNC(writer_state::pic_portb_w));
 }
 
 
 ROM_START( akwriter )
 	ROM_REGION( 0x100000, "maincpu", 0 ) // physical region read by the shadow; no direct ROM mapping in diagnostic build
 	ROM_LOAD( "akt_writer_v3.70_m27c801.bin", 0x000000, 0x100000, CRC(c454875c) SHA1(6bd0691f96c7987b2e266e220834bf4d7e3e22b4) )
+
+	// REAL PIC16C54C (U11) dump: Arduino+Willem reader, DS30190 verify-mode,
+	// 3 identical reads (SHA256 verified separately). 512 words of 12 bits,
+	// stored as 16-bit little-endian words (standard MAME PIC16C5x format).
+	ROM_REGION( 0x400, "piccpu", 0 )
+	ROM_LOAD( "writer_instructor_pic16c54c_u11.bin", 0x000, 0x400, CRC(d7690376) SHA1(2259c2c463d35730ea2b80caa8bf970d677ca287) )
 ROM_END
 
 } // anonymous namespace

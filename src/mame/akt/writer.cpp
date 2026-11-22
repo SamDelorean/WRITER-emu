@@ -123,10 +123,15 @@ private:
 	TIMER_DEVICE_CALLBACK_MEMBER(d017_tick);
 	virtual void machine_reset() override ATTR_COLD;
 
-	// REAL PIC16C54C (U11), RE-only logging for now (see header comment).
+	// REAL PIC16C54C (U11). Its free-running loop toggles these ports
+	// continuously (confirmed by the real-dump disassembly, see header
+	// comment) - logging every write floods error.log (12000+ lines in a
+	// few seconds) and chokes emulation speed for no new information, so
+	// these are no-ops for now. Re-enable logerror here only for a PIC-
+	// specific trace, not for general Z180/keyboard/LCD runs.
 	uint8_t pic_porta_r() { return 0x00; } // TODO: real handshake lines, not wired yet
-	void pic_porta_w(uint8_t data) { logerror("PIC PORTA=%02X\n", data); }
-	void pic_portb_w(uint8_t data) { logerror("PIC PORTB=%02X (TX bit0=%u)\n", data, BIT(data, 0)); }
+	void pic_porta_w(uint8_t data) { }
+	void pic_portb_w(uint8_t data) { }
 
 	void map_program(address_map &map) ATTR_COLD;
 	void map_io(address_map &map) ATTR_COLD;

@@ -295,7 +295,7 @@ void writer_state::machine_reset()
 	// echoes which character on the live LCD). It must stay OFF (set this
 	// to false and rebuild) for any run meant to document real physical
 	// recovery, where reaching this screen genuinely is the starting state.
-	constexpr bool ANALYSIS_FORCE_VALID_RAM_SIGNATURE = false;
+	constexpr bool ANALYSIS_FORCE_VALID_RAM_SIGNATURE = true;
 	if (ANALYSIS_FORCE_VALID_RAM_SIGNATURE)
 	{
 		m_mem[0xcd000] = 0x6a; m_mem[0xcd001] = 0x91;

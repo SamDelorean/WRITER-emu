@@ -118,3 +118,40 @@ La ROM principal presenta configuración de ASCI1 y lectura de su registro recep
 - No modificar el modelo PIC ni el cableado en `writer.cpp` hasta tener evidencia suficiente.
 - Registrar nuevos hallazgos con dirección de palabra PIC, instrucción, condición y efecto observado.
 - Conservar el volcado y los listados Ghidra como evidencia reproducible.
+
+
+## 9. Reconstrucción de perfiles de puertos
+
+Las rutinas cortas de configuración permiten reconstruir los estados eléctricos que el PIC programa en sus pines. Los valores siguientes son los latches de PORTA/PORTB y las direcciones TRIS inmediatamente después de cada rutina; no equivalen todavía a continuidad hacia un componente concreto.
+
+### Perfiles identificados
+
+| Rutina | PORTB | TRISB | PORTA | TRISA | Efecto de dirección |
+|---|---:|---:|---:|---:|---|
+| `0x03E` | `0x30` | `0x4E` | `0x00` | `0x01` | RB0/RB4/RB5/RB7 salidas; RA0 entrada |
+| `0x047` | `0x00` | `0xDE` | `0x00` | `0x00` | RB0/RB5 salidas; RA0–RA3 salidas |
+| `0x050` | `0x01` | `0xDA` | `0x0C` | `0x00` | RB0/RB2/RB5 salidas; RA0–RA3 salidas |
+| `0x059` | `0x01` | `0xDA` | `0x0C` | `0x02` | Igual que anterior, salvo RA1 como entrada |
+| `0x062` | `0x01` | `0xDA` | `0x0C` | `0x00` | Igual que `0x050` |
+| `0x06B` | `0x00` | `0xDE` | `0x00` | `0x00` | Igual que `0x047` |
+
+### Consecuencias por señal
+
+- **RA2 (pin 1):** en los perfiles `0x050`, `0x059` y `0x062`, el latch de PORTA vale `0x0C`; por tanto RA2 y RA3 se dejan inicialmente altos. La secuencia `0x0C1–0x0C2` baja y vuelve a subir RA2, mientras RA3 permanece alto. Es un pulso sobre RA2 con RA3 alto, no una señal compartida con T0CKI.
+- **RA3 (pin 2):** es una línea real del PIC16C54C. El bit 3 de PORTA se establece con el valor `0x0C`; en los perfiles indicados queda como salida alta. Su destino físico aún no está identificado.
+- **T0CKI (pin 3):** es independiente de PORTA y RA2. OPTION=`0x20` selecciona reloj externo para Timer0; falta localizar la fuente que alimenta este pin.
+- **RB0 (pin 6):** permanece como salida en las tres máscaras TRISB. El latch se inicializa bajo en `0x03E`, `0x047` y `0x06B`; en `0x050`, `0x059` y `0x062` se inicializa alto. La rutina `0x027` modifica RB0 bit a bit para la transmisión.
+- **RB2 (pin 8):** cambia de entrada en TRISB=`0x4E`/`0xDE` a salida en TRISB=`0xDA`. Esto confirma uso bidireccional por fases; no asignar todavía nombres como DATA, CLK o ACK.
+- **RB4 (pin 10), RB6 (pin 12) y RB7 (pin 13):** son salidas únicamente en el perfil TRISB=`0x4E` para RB4/RB7; RB6 permanece entrada. En los perfiles `0xDE` y `0xDA`, RB4 y RB7 son entradas.
+- **RB5 (pin 11):** es salida en todos los perfiles observados. Su latch toma el valor del bit 5 de PORTB: alto en el perfil `0x03E` (`PORTB=0x30`) y bajo en los demás perfiles (`0x00` o `0x01`).
+- **RB1 (pin 7) y RB3 (pin 9):** permanecen como entradas en todas las máscaras TRISB observadas y son consultadas por la máquina de estados.
+
+### Rutinas de espera y contador
+
+Las direcciones `0x000–0x014` son secuencias de retardo basadas en llamadas anidadas, NOP y CLRWDT; no contienen escrituras a puertos. Las entradas `0x00A`, `0x010` y `0x011` permiten entrar a distintos puntos de la misma secuencia, variando el tiempo de espera.
+
+La rutina `0x015–0x021` actualiza el acumulador/divisor de fase y el contador de 32 bits descrito en la sección 3. Las rutinas `0x022–0x026` combinan esa actualización con retardos o bucles de espera. Por tanto, su efecto relevante para el cableado es temporal; no constituyen por sí mismas nuevas señales de salida.
+
+### Límite de la reconstrucción
+
+Con el firmware se conoce qué pines se configuran como entradas/salidas, qué niveles se escriben en sus latches y en qué fases se leen. No se puede deducir el componente receptor, la presencia de resistencias pull-up/pull-down, buffers o inversión lógica sin esquema, fotografía legible de ambas caras o mediciones de continuidad. La asignación física de RB1/RB2/RB3/RB4/RB5/RB6/RB7 y de RA2/RA3/T0CKI queda pendiente de trazado en la placa.

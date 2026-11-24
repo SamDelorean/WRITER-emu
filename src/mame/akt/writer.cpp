@@ -130,7 +130,26 @@ private:
 	// these are no-ops for now. Re-enable logerror here only for a PIC-
 	// specific trace, not for general Z180/keyboard/LCD runs.
 	uint8_t pic_porta_r() { return 0x00; } // TODO: real handshake lines, not wired yet
-	void pic_porta_w(uint8_t data) { }
+
+	// PIC pin1 (RA2) = Z180 pin11 (/INT1), per continuity measurement
+	// (WRITER_RE_06_PIC_mapa_conexiones_U11, 2026-11-22). This is a likely
+	// explanation for the Z180 parking in a tight RAM-writing loop
+	// (PC=11D2, confirmed by trace) even once the boot RAM-signature check
+	// passes: the firmware may be waiting on an interrupt from the PIC
+	// that was never arriving because this line wasn't connected at all.
+	// UNCONFIRMED here: exact polarity (asserted low is the Z180 INT1
+	// convention, assumed, not measured) and whether RA2 is driven by the
+	// PIC at this moment or configured as TMR0's external-clock input
+	// instead (the real dump's OPTION=0x20/T0CS=1 suggests the latter, at
+	// least some of the time - PIC16C5x ports are bit-direction-switchable
+	// via TRISA at runtime, so both could be true at different moments).
+	// Treat this wiring as a testable hypothesis, not a confirmed fact:
+	// verify against this MAME version's z180.h input-line enum name
+	// before relying on it, and watch whether it changes the PC=11D2 hang.
+	void pic_porta_w(uint8_t data)
+	{
+		m_maincpu->set_input_line(Z180_INPUT_LINE_IRQ1, BIT(data, 2) ? CLEAR_LINE : ASSERT_LINE);
+	}
 	void pic_portb_w(uint8_t data) { }
 
 	void map_program(address_map &map) ATTR_COLD;

@@ -172,9 +172,17 @@ private:
 	// resulting vector address before drawing conclusions from this
 	// wiring alone. Electrical polarity (asserted-low) is still per the
 	// Z180 INT1 convention, not individually measured.
+	// TEMPORARILY DISCONNECTED (2026-11-23, by explicit instruction, after
+	// the full-ROM scan above found no handler installed at the computed
+	// IRQ1 vector 0xD700 anywhere in the 1 MiB image - see
+	// WRITER_RE_08_IRQ1_vector_Ghidra sec. 5). The electrical wiring
+	// (RA2 -> /INT1) stays as documented above and is not in question;
+	// only the line is not driven for now, to isolate whether the hang
+	// comes from somewhere else. Re-enable with the commented-out line
+	// below once a real IRQ1 handler/vector is located.
 	void pic_porta_w(uint8_t data)
 	{
-		m_maincpu->set_input_line(Z180_INPUT_LINE_IRQ1, BIT(data, 2) ? CLEAR_LINE : ASSERT_LINE);
+		// m_maincpu->set_input_line(Z180_INPUT_LINE_IRQ1, BIT(data, 2) ? CLEAR_LINE : ASSERT_LINE);
 	}
 	void pic_portb_w(uint8_t data) { }
 

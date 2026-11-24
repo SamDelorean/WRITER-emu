@@ -80,6 +80,7 @@
 #include "emu.h"
 
 #include <cstdio>
+#include <cstdlib>
 
 #include "cpu/z180/z180.h"
 #include "cpu/pic16c5x/pic16c5x.h"
@@ -101,6 +102,7 @@ public:
 		, m_piccpu(*this, "piccpu")
 		, m_lcdc(*this, "ks0066_%u", 0U)
 		, m_rom(*this, "maincpu")
+		, m_mainbank(*this, "mainbank")
 		, m_kb(*this, "ROW%u", 0U)
 	{ }
 
@@ -115,13 +117,11 @@ private:
 	required_device_array<ks0066_device, 2> m_lcdc;
 	std::unique_ptr<bitmap_ind16> m_tmp_bitmap;
 	required_region_ptr<uint8_t> m_rom;
+	required_memory_bank m_mainbank;
 	required_ioport_array<8> m_kb;
 	std::unique_ptr<uint8_t[]> m_mem;
-	uint32_t m_wr_pages[256] = { };
 	uint8_t m_kb_strobe = 0;
 
-	uint8_t mem_r(offs_t offset) { return m_mem[offset]; }
-	void mem_w(offs_t offset, uint8_t data);
 	uint16_t kb_sense();
 	void kb_strobe_w(uint8_t data) { m_kb_strobe = data; }
 	uint8_t kb_sense_lo_r() { return kb_sense() & 0xff; }
@@ -208,8 +208,20 @@ private:
 
 void writer_state::map_program(address_map &map)
 {
-	// DIAGNOSTIC: RAM shadow of the ROM over the whole physical space
-	map(0x00000, 0xfffff).rw(FUNC(writer_state::mem_r), FUNC(writer_state::mem_w));
+	// Native banked RAM/ROM shadow (same fast-path technique as AS2K's
+	// alphasma.cpp: map(...).bankrw(...)/rom().region(...), not a per-byte
+	// .rw() handler). The earlier version routed the entire 1 MiB through
+	// mem_r/mem_w for per-page "first write" logging; that put every single
+	// opcode fetch and operand access through MAME's address_map device
+	// dispatch, which measured far slower here than AS2K's equivalent diag
+	// build using the same compiler flags (OPTIMIZE=2 SSE2=0, confirmed
+	// identical between build_writerdiag.sh and build-as2k-stable-arm64.sh).
+	// Exhaustive per-access logging already served its purpose (the MEMWR
+	// page-write pattern that led to the self-relocation finding is
+	// documented in Drive); ongoing inspection now uses the WRITER_MEM_DUMP_FILE
+	// one-shot snapshot and WRITER_UI_FRAME_FILE periodic frame dump instead,
+	// neither of which costs anything on the hot path.
+	map(0x00000, 0xfffff).bankrw(m_mainbank);
 }
 
 void writer_state::map_io(address_map &map)
@@ -234,15 +246,6 @@ uint16_t writer_state::kb_sense()
 		if (BIT(m_kb_strobe, 7 - i))
 			v |= m_kb[i]->read();
 	return v;
-}
-
-void writer_state::mem_w(offs_t offset, uint8_t data)
-{
-	uint32_t &cnt = m_wr_pages[offset >> 12];
-	if (cnt == 0)
-		logerror("MEMWR first write to page %05X-%05X (addr %05X = %02X) PC=%04X\n", offset & 0xff000, (offset & 0xff000) | 0xfff, offset, data, m_maincpu->pc());
-	cnt++;
-	m_mem[offset] = data;
 }
 
 uint8_t writer_state::ext_io_r(offs_t offset)
@@ -308,10 +311,48 @@ TIMER_DEVICE_CALLBACK_MEMBER(writer_state::d017_tick)
 
 void writer_state::report_writes()
 {
-	logerror("MEMWR summary (4 KiB pages with writes):\n");
-	for (int i = 0; i < 256; i++)
-		if (m_wr_pages[i])
-			logerror("  %05X-%05X : %u writes\n", i << 12, (i << 12) | 0xfff, m_wr_pages[i]);
+	// One-shot live-RAM snapshot for Ghidra, gated by env var (same opt-in
+	// pattern as WRITER_UI_FRAME_FILE). Needed because, per RE notes, only
+	// the first 0x3000 bytes of physical C0000-CFFFF are a straight copy of
+	// ROM bank 0x00 (the self-relocating boot LDIR); everything the CPU
+	// writes afterward (memtest, variables, any code it builds at runtime)
+	// is live RAM state that does not exist anywhere in the static ROM
+	// file, under any bank. A flat ROM-bank import can never represent it;
+	// this dumps what the CPU actually has at machine exit instead. Default
+	// range covers logical 0000-FFFF = physical C0000-CFFFF (current
+	// CBAR=F0/CBR=C0/BBR=C0 mapping), overridable via WRITER_MEM_DUMP_BASE/
+	// WRITER_MEM_DUMP_LEN (hex, no 0x prefix) for other physical windows.
+	if (char const *path = std::getenv("WRITER_MEM_DUMP_FILE"))
+	{
+		uint32_t base = 0xc0000;
+		uint32_t len = 0x10000;
+		if (char const *b = std::getenv("WRITER_MEM_DUMP_BASE"))
+			base = strtoul(b, nullptr, 16);
+		if (char const *l = std::getenv("WRITER_MEM_DUMP_LEN"))
+			len = strtoul(l, nullptr, 16);
+		if (base + len > 0x100000)
+			len = 0x100000 - base;
+		std::string tmp = std::string(path) + ".tmp";
+		if (FILE *f = fopen(tmp.c_str(), "wb"))
+		{
+			fwrite(&m_mem[base], 1, len, f);
+			fclose(f);
+			std::rename(tmp.c_str(), path);
+			logerror("MEMDUMP wrote %06X-%06X (%u bytes) to %s\n", base, base + len - 1, len, path);
+		}
+		else
+		{
+			logerror("MEMDUMP failed to open %s\n", tmp.c_str());
+		}
+	}
+
+	// Per-page "first write" counting (m_wr_pages) was removed along with
+	// mem_r/mem_w: it required routing the whole 1 MiB through a per-byte
+	// .rw() handler instead of AS2K's native .bankrw()/.rom() fast path,
+	// which measured far slower on this machine. It already served its
+	// purpose (documented in Drive: the self-relocation LDIR into C0000-
+	// C2FFF, and heavy memtest traffic in CC000-CDFFF). WRITER_MEM_DUMP_FILE
+	// above gives an equivalent live-RAM view without that per-access cost.
 
 	// Final CPU/RAM snapshot for RE: where did execution park, and what do the
 	// boot-flow variables hold (D000/D002 RAM signatures, D011/D013 PIC bytes,
@@ -380,6 +421,7 @@ void writer_state::machine_start()
 {
 	m_tmp_bitmap = std::make_unique<bitmap_ind16>(6 * 40, 9 * 4);
 	m_mem = std::make_unique<uint8_t[]>(0x100000);
+	m_mainbank->set_base(&m_mem[0]);
 	machine().add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(&writer_state::report_writes, this));
 
 	if (char const *path = std::getenv("WRITER_UI_FRAME_FILE"))

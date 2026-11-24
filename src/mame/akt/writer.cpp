@@ -79,6 +79,8 @@
 
 #include "emu.h"
 
+#include <cstdio>
+
 #include "cpu/z180/z180.h"
 #include "cpu/pic16c5x/pic16c5x.h"
 #include "video/hd44780.h"
@@ -131,6 +133,17 @@ private:
 	void report_writes();
 	TIMER_DEVICE_CALLBACK_MEMBER(d017_tick);
 	virtual void machine_reset() override ATTR_COLD;
+
+	// Minimal headless frame-dump bridge, same env-var pattern as AS2K's
+	// alphasma.cpp (AS2K_UI_FRAME_FILE), ported here for writerdiag only:
+	// this build is the diagnostic target, so this kind of instrumentation
+	// is the point of it. Opt-in only (env var unset = zero overhead, no
+	// behavior change for normal headless self-test runs). Dumps the
+	// already-rendered LCD bitmap as a binary PPM every few frames so a
+	// screenshot can be pulled without SDL/X11 window automation tools.
+	std::string m_ui_frame_path;
+	uint64_t m_ui_frame_counter = 0;
+	void ui_frame_dump(screen_device &screen, bitmap_ind16 &bitmap);
 
 	// REAL PIC16C54C (U11). Its free-running loop toggles these ports
 	// continuously (confirmed by the real-dump disassembly, see header
@@ -327,7 +340,40 @@ uint32_t writer_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap
 	copybitmap(bitmap, *m_tmp_bitmap, 0, 0, 0, 0, cliprect);
 	m_lcdc[1]->screen_update(screen, *m_tmp_bitmap, cliprect);
 	copybitmap(bitmap, *m_tmp_bitmap, 0, 0, 0, 18, cliprect);
+
+	if (!m_ui_frame_path.empty() && (++m_ui_frame_counter % 15) == 0)
+		ui_frame_dump(screen, bitmap);
+
 	return 0;
+}
+
+void writer_state::ui_frame_dump(screen_device &screen, bitmap_ind16 &bitmap)
+{
+	// Same purpose as AS2K's AS2K_UI_FRAME_FILE in alphasma.cpp: dump the
+	// already-rendered frame to a file so it can be pulled without any
+	// SDL/X11 window automation tool, including fully headless
+	// (-video none) runs where there is no window to screenshot at all.
+	// Written to a .tmp path then renamed, so a reader never sees a
+	// partially-written file.
+	int const w = bitmap.width(), h = bitmap.height();
+	std::string tmp_path = m_ui_frame_path + ".tmp";
+	FILE *f = fopen(tmp_path.c_str(), "wb");
+	if (!f)
+		return;
+	fprintf(f, "P6\n%d %d\n255\n", w, h);
+	device_palette_interface &pal = screen.palette();
+	for (int y = 0; y < h; y++)
+	{
+		uint16_t const *row = &bitmap.pix(y, 0);
+		for (int x = 0; x < w; x++)
+		{
+			rgb_t const c = pal.pen_color(row[x]);
+			uint8_t const rgb[3] = { c.r(), c.g(), c.b() };
+			fwrite(rgb, 1, 3, f);
+		}
+	}
+	fclose(f);
+	std::rename(tmp_path.c_str(), m_ui_frame_path.c_str());
 }
 
 void writer_state::machine_start()
@@ -335,6 +381,9 @@ void writer_state::machine_start()
 	m_tmp_bitmap = std::make_unique<bitmap_ind16>(6 * 40, 9 * 4);
 	m_mem = std::make_unique<uint8_t[]>(0x100000);
 	machine().add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(&writer_state::report_writes, this));
+
+	if (char const *path = std::getenv("WRITER_UI_FRAME_FILE"))
+		m_ui_frame_path = path;
 }
 
 void writer_state::machine_reset()

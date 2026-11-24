@@ -55,9 +55,18 @@
     runs a free loop keeping its own 40-bit software tick counter (bytes
     0x08-0x0B + 0x0C), and on a PORTB handshake condition it bit-bangs
     that 4-byte counter out serially on PORTB,0 (-> Z180 ASCI1 RX). It also
-    drives TMR0 from an external clock on T0CKI/RA2 (OPTION=0x20) and
-    pulses RA2 to scan the keyboard. Full details + address-by-address
-    disassembly: confidential doc WRITER_RE_05_PIC_desensamblado_real.
+    drives TMR0 from an external clock, OPTION=0x20 (T0CS=1, T0SE=0,
+    prescaler 1:2 on Timer0). CORRECTED (Ghidra disasm, analysis_20261121,
+    confirmed on the real dump): RA2 (pin 1) and T0CKI (pin 3) are
+    DISTINCT physical PIC pins, not one signal as an earlier comment here
+    assumed. The firmware does pulse RA2 (PORTA bits cleared/set at PIC
+    words 0x0C1-0x0C2, alongside RA3), but nothing in the disassembly ties
+    that pulse to the keyboard strobe - the real matrix-scan routine
+    (ROM 0x0CF6) uses Z180 ports 0x40/0x80/0x82 only, entirely separate
+    from the PIC. Do not re-label RA2 as a "keyboard clock" without
+    following the trace on the board. Full details + address-by-address
+    disassembly: confidential doc WRITER_RE_05_PIC_desensamblado_real;
+    cross-checked against WRITER_RE_08_IRQ1_vector_Ghidra (2026-11-23).
 
     This build adds the REAL pic16c5x core (MAME's own PIC16C54 device,
     src/devices/cpu/pic16c5x) running the real dump, wired only to logging
@@ -132,20 +141,37 @@ private:
 	uint8_t pic_porta_r() { return 0x00; } // TODO: real handshake lines, not wired yet
 
 	// PIC pin1 (RA2) = Z180 pin11 (/INT1), per continuity measurement
-	// (WRITER_RE_06_PIC_mapa_conexiones_U11, 2026-11-22). This is a likely
-	// explanation for the Z180 parking in a tight RAM-writing loop
-	// (PC=11D2, confirmed by trace) even once the boot RAM-signature check
-	// passes: the firmware may be waiting on an interrupt from the PIC
-	// that was never arriving because this line wasn't connected at all.
-	// UNCONFIRMED here: exact polarity (asserted low is the Z180 INT1
-	// convention, assumed, not measured) and whether RA2 is driven by the
-	// PIC at this moment or configured as TMR0's external-clock input
-	// instead (the real dump's OPTION=0x20/T0CS=1 suggests the latter, at
-	// least some of the time - PIC16C5x ports are bit-direction-switchable
-	// via TRISA at runtime, so both could be true at different moments).
-	// Treat this wiring as a testable hypothesis, not a confirmed fact:
-	// verify against this MAME version's z180.h input-line enum name
-	// before relying on it, and watch whether it changes the PC=11D2 hang.
+	// (WRITER_RE_06_PIC_mapa_conexiones_U11, 2026-11-22, "Confirmado").
+	// CONFIRMED BY DISASSEMBLY, NOT GUESSED (Ghidra analysis_20261121 +
+	// MAME src/devices/cpu/z180/z180.cpp cross-check, 2026-11-23):
+	//   - Reset code at ROM 0x242d-2431 sets IM 1 then LD I,A with A=0xd7.
+	//   - ROM 0x2433-2438 clears ITC bits 0-2 (AND 0xf8) right after,
+	//     then EI at 0x243b.
+	//   - The very next call, ROM 0x214b (invoked once, at 0x243c, as
+	//     part of boot), does IN0 A,(0x34) / OR 0x2 / OUT0 (0x34),A -
+	//     this SETS ITC bit 1, i.e. Z180_ITC_ITE1 (=0x02 in z180.cpp) -
+	//     so the firmware DOES explicitly enable the IRQ1 interrupt
+	//     shortly after reset. /INT1 is a live, intended interrupt line,
+	//     not a leftover/unused pin.
+	// OPEN, STILL NOT RESOLVED (this is the real next step, not a guess
+	// to fill in): per z180.cpp's take_interrupt(), IRQ1 does not use
+	// RST 38h - it reads a 16-bit pointer from RAM at ((I<<8)|IL) and
+	// jumps there. With I=0xd7 and IL defaulting to 0x00 (m_il never
+	// written anywhere in the 64 KiB analyzed ROM window - no OUT0/IN0
+	// on port 0x33 at all), that address is 0xD700. No instruction in
+	// the analyzed window writes a literal 0xd6xx/0xd70x/0xd71x value
+	// anywhere, so no confirmed handler pointer is installed there in
+	// this window. Firing /INT1 may therefore jump through whatever
+	// happens to be in RAM at 0xD700/0xD701 - which would explain erratic
+	// parking rather than reaching a real handler. Two real possibilities,
+	// neither assumed here: (a) the vector IS set up, but by code in a
+	// banked ROM region outside Ghidra's 64 KiB logical window (CBAR/
+	// CBR/BBR banking - not yet checked), or (b) IL is written via some
+	// path not yet found and 0xD700 is the wrong address. Next step:
+	// check the banked regions for a write to port 0x33 or to the
+	// resulting vector address before drawing conclusions from this
+	// wiring alone. Electrical polarity (asserted-low) is still per the
+	// Z180 INT1 convention, not individually measured.
 	void pic_porta_w(uint8_t data)
 	{
 		m_maincpu->set_input_line(Z180_INPUT_LINE_IRQ1, BIT(data, 2) ? CLEAR_LINE : ASSERT_LINE);

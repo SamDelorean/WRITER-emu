@@ -13,11 +13,23 @@ The previous PIC/Z180 boot deadlock has been resolved at the interconnect level.
 - PIC RB2 defaults high as the inactive J1 input level in the emulator; the physical idle voltage still needs measurement.
 - PIC RB3 currently models aggregate keyboard activity; its exact connection to U9 2A1 and the corresponding matrix column remain to be identified.
 
-The emulator now reaches the firmware's **MEMORY ERROR WARNING** and then sleeps at PC `0x0E27`. This is not a processor deadlock. The cold SRAM signature is invalid because the physical 256 KiB SRAM map and persistence are not yet implemented. No master reset was executed and no RAM was erased intentionally.
+The firmware recognizes the F1+F2 Master Reset chord (F1=R2C6, F2=R6C6) and reaches the password prompt. The original ROM Master Reset routine was then executed in the emulator. It generated the expected RAM signature at D000–D003 and initialized the observed D800–EFFF areas. This is a real ROM-generated result, not an injected signature.
+
+After that initialization, the next failure is:
+
+```text
+Aborting App - Fatal Error
+Missing Application BIOS, 0x203B
+Powering Down...
+```
+
+The current investigation therefore moves to password-key capture, the application storage/directory format, SRAM bank mapping/persistence, and locating/loading the Application BIOS. The RAM capture is only a 64 KiB logical window, not the full 256 KiB physical SRAM image.
 
 `MACHINE_NOT_WORKING` remains set. This is not yet a complete hardware emulator.
 
-See [`docs/BOOT_BLOCKER_RESOLUTION_20261125.md`](docs/BOOT_BLOCKER_RESOLUTION_20261125.md) for the investigation, Ghidra evidence, test results and remaining work.
+See:
+- [Boot interconnect and IRQ1 resolution](docs/BOOT_BLOCKER_RESOLUTION_20261125.md)
+- [Recovery status, RAM initialization evidence and next starting point](docs/RECOVERY_STATUS_AND_NEXT_START_20261125.md)
 
 ## Hardware model
 
@@ -58,6 +70,9 @@ Diagnostic overrides:
 - `WRITER_TEST_PIC_WAKE=1` injects a short RB3 keyboard-wake pulse.
 - `WRITER_MEM_DUMP_FILE=/path/to/snapshot.bin` saves the logical `0000–FFFF` window (currently physical `C0000–CFFFF`, 64 KiB), not the complete 256 KiB SRAM.
 - `WRITER_UI_FRAME_FILE=/path/to/frame.ppm` saves the rendered LCD frame.
+- `WRITER_TEST_MASTER_RESET_KEYS=1` injects the F1+F2 chord for one diagnostic matrix scan.
+- `WRITER_TEST_EXECUTE_MASTER_RESET=1` redirects the Z180 PC to the original ROM reset routine after two emulated seconds; test-only.
+- `WRITER_TEST_VALID_RAM_SIGNATURE=1` injects only the two signature words as an experimental control; it is not a reset and must not be used as a normal boot workaround.
 
 ## Ghidra and evidence
 
@@ -67,7 +82,7 @@ Local analysis workspace:
 /home/spc/projects/WRITER_INSTRUCTOR/willem/ghidra_writer/
 ```
 
-The 2026-11-21 analysis outputs are under `analysis_20261121/out/`. They include the main ROM and PIC disassemblies and live RAM snapshots. The 2026-11-25 boot-resolution report records the corrected IRQ1 vector analysis.
+The 2026-11-21 analysis outputs are under `analysis_20261121/out/`. The 2026-11-25 reports record the IRQ1 vector correction, Master Reset path and post-reset Application BIOS failure. Diagnostic RAM captures and the run log are preserved under the project's `snap/` and `diag/` folders and in the project Drive archive.
 
 ## Legal and license
 

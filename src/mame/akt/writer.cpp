@@ -91,6 +91,9 @@ private:
 	int m_z180_txa1 = 1;
 	int m_pic_force_wake_reads = 0;
 	bool m_pic_rb2_idle_high = true;
+	bool m_test_master_reset_keys = false;
+	int m_test_master_reset_scan_reads = 0;
+	emu_timer *m_test_master_reset_timer = nullptr;
 
 	uint16_t kb_sense();
 	bool any_key_pressed();
@@ -106,6 +109,7 @@ private:
 	void lcd_w(offs_t offset, uint8_t data);
 	void report_writes();
 	TIMER_DEVICE_CALLBACK_MEMBER(d017_tick);
+	TIMER_CALLBACK_MEMBER(test_master_reset);
 	virtual void machine_reset() override ATTR_COLD;
 
 	// Minimal headless frame-dump bridge, same env-var pattern as AS2K's
@@ -214,6 +218,23 @@ uint16_t writer_state::kb_sense()
 	for (int i = 0; i < 8; i++)
 		if (BIT(m_kb_strobe, 7 - i))
 			v |= m_kb[i]->read();
+
+	// Test-only cold-boot chord injection. The firmware's 0x23AC matrix
+	// signature is F1=R2C6 plus F2=R6C6. Inject exactly one complete scan
+	// during its early 0x0CF6 check; never alter normal keyboard reads.
+	const uint16_t pc = m_maincpu->pc();
+	if (m_test_master_reset_keys && m_test_master_reset_scan_reads < 16 && pc >= 0x0d00 && pc <= 0x0d20)
+	{
+		if (m_kb_strobe == 0x20 || m_kb_strobe == 0x02)
+			v |= 0x0040;
+		logerror("TEST MASTER RESET KEY scan=%d strobe=%02X value=%04X PC=%04X\n",
+			++m_test_master_reset_scan_reads, m_kb_strobe, v, pc);
+		if (m_test_master_reset_scan_reads == 16)
+		{
+			m_test_master_reset_keys = false;
+			logerror("TEST MASTER RESET KEY chord released\n");
+		}
+	}
 	return v;
 }
 
@@ -307,6 +328,14 @@ TIMER_DEVICE_CALLBACK_MEMBER(writer_state::d017_tick)
 	v++;
 	m_mem[0xcd017] = v & 0xff;
 	m_mem[0xcd018] = v >> 8;
+}
+// Test-only entry into the ROM's own Master Reset routine. This skips
+// only the F1+F2/password UI; all memory initialization is executed by
+// the original Z180 code at 0x2523. Never enabled unless explicitly asked.
+TIMER_CALLBACK_MEMBER(writer_state::test_master_reset)
+{
+	logerror("TEST: redirecting Z180 PC to ROM Master Reset routine 2523\n");
+	m_maincpu->set_pc(0x2523);
 }
 
 void writer_state::report_writes()
@@ -428,8 +457,21 @@ void writer_state::machine_start()
 	}
 	if (char const *rb2 = std::getenv("WRITER_PIC_RB2"))
 		m_pic_rb2_idle_high = (rb2[0] != '0');
+	if (char const *mr = std::getenv("WRITER_TEST_MASTER_RESET_KEYS"))
+		m_test_master_reset_keys = (mr[0] == '1');
+	if (m_test_master_reset_keys)
+		logerror("TEST: inject F1+F2 for the first firmware keyboard matrix scan\n");
 	if (m_pic_force_wake_reads)
 		logerror("TEST: one-shot PIC RB3 keyboard-wake pulse (%d PORTB reads)\n", m_pic_force_wake_reads);
+	if (char const *mr = std::getenv("WRITER_TEST_EXECUTE_MASTER_RESET"))
+	{
+		if (mr[0] == '1')
+		{
+			m_test_master_reset_timer = timer_alloc(FUNC(writer_state::test_master_reset), this);
+			m_test_master_reset_timer->adjust(attotime::from_seconds(2));
+			logerror("TEST: schedule original ROM Master Reset routine after 2 emulated seconds\n");
+		}
+	}
 	machine().add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(&writer_state::report_writes, this));
 
 	if (char const *path = std::getenv("WRITER_UI_FRAME_FILE"))
@@ -440,14 +482,18 @@ void writer_state::machine_reset()
 {
 	std::copy_n(&m_rom[0], 0x100000, &m_mem[0]);
 
-	// Optional analysis-only signature injection for keyboard-matrix work.
-	// It is deliberately disabled: normal runs must exercise the real cold-
-	// RAM validation path and display the firmware's MEMORY ERROR WARNING.
-	constexpr bool ANALYSIS_FORCE_VALID_RAM_SIGNATURE = false;
-	if (ANALYSIS_FORCE_VALID_RAM_SIGNATURE)
+	// Diagnostic-only bypass of the cold-SRAM signature gate. This does
+	// NOT initialize the rest of SRAM and must never be enabled for normal
+	// operation. It distinguishes a missing Master Reset signature from
+	// later boot/model faults. Real Master Reset writes these same words.
+	if (char const *force = std::getenv("WRITER_TEST_VALID_RAM_SIGNATURE"))
 	{
-		m_mem[0xcd000] = 0x6a; m_mem[0xcd001] = 0x91;
-		m_mem[0xcd002] = 0x3c; m_mem[0xcd003] = 0x5a;
+		if (force[0] == '1')
+		{
+			m_mem[0xcd000] = 0x6a; m_mem[0xcd001] = 0x91;
+			m_mem[0xcd002] = 0x3c; m_mem[0xcd003] = 0x5a;
+			logerror("TEST: injected Master Reset SRAM signature at D000/D002\n");
+		}
 	}
 }
 

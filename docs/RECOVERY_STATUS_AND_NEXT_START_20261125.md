@@ -209,6 +209,6 @@ Se recuperó la hoja de datos que el usuario subió a `01_Investigacion_y_desarr
 - **No volver a pedir identificar los integrados ni repetir la continuidad RA3→CS2.** Esa información está en Drive y documentada.
 - Sigue pendiente: trazar `/CS1` individual de U16/U17 (se espera una función de selección de bancos, posiblemente U21 74HC139, aún no medida), `/OE`, `/WE`, bus de direcciones, bus de datos y mapa físico/bancos. Tampoco se dispone todavía de un volcado real de los 256 KiB físicos.
 
-El libro `WRITER_hardware_referencia.xlsx` se actualizó: se renombró la hoja a `U_SRAM_K6X1008C2D`, se corrigió la asignación de pines y se separó lo que está medido de lo que continúa como hipótesis. Ver `docs/SRAM_K6X1008C2D_HARDWARE_EVIDENCE_20261125.md`.
+El libro `WRITER_hardware_referencia.xlsx` conserva su hoja heredada `U_SRAM_K6T1008` y contiene un pinout incorrecto para CS1/CS2/OE/A10. **No usar esa tabla como referencia de pines** hasta actualizarla. El pinout corregido y la clasificación medida/hipótesis quedan documentados en `docs/SRAM_K6X1008C2D_HARDWARE_EVIDENCE_20261125.md`.
 
 **Nuevo punto de partida:** no comenzar otro levantamiento completo. Recuperar o completar solamente la selección individual `/CS1` y las conexiones `/OE`, `/WE`, A0–A16 e I/O1–I/O8; después correlacionar la respuesta de cada chip durante `0x2206` y construir el mapa SRAM/EPROM separado. La hipótesis de bytes EPROM visibles en la ventana esperada de SRAM sigue vigente, pero el modelo requiere confirmar /CS1 y bancos antes de implementarse.

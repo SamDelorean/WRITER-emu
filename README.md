@@ -38,6 +38,7 @@ See:
 - [Recovery status, RAM initialization evidence and next starting point](docs/RECOVERY_STATUS_AND_NEXT_START_20261125.md)
 - [Samsung K6X1008C2D-GB55 — SRAM hardware evidence and corrected pinout](docs/SRAM_K6X1008C2D_HARDWARE_EVIDENCE_20261125.md)
 - [PIC RA3 / SRAM CS2 dynamic trace](docs/RA3_SRAM_CS2_TRACE_20261125.md)
+- [SRAM bus continuity test matrix — U16/U17, U21 and Z180](docs/SRAM_BUS_CONTINUITY_TEST_MATRIX_20261125.md)
 
 ## Hardware model
 

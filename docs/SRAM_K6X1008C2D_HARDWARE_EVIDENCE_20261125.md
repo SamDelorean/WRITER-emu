@@ -28,8 +28,7 @@ En las vistas de la placa se distinguen los designadores U16 y U17 y el marcaje 
 Documento previo de identificación:
 `01_Hardware/Identificacion_de_componentes/COMPONENTES_IDENTIFICADOS.md`
 
-Referencia técnica previa:
-`WRITER_hardware_referencia.xlsx`, hoja heredada `U_SRAM_K6T1008`. El nombre de esa hoja y su tabla de pines estaban desactualizados/inexactos en varios números de pin; no usar la tabla anterior sin aplicar la corrección de este informe.
+Libro de referencia actualizado en Drive: `WRITER_hardware_referencia.xlsx`, pestaña con nombre heredado `U_SRAM_K6T1008`. El contenido del pinout se corrigió para Samsung K6X1008C2D-GB55 (32-SOP) y se separó la continuidad medida de las rutas todavía hipotéticas. El nombre de la pestaña se conserva por compatibilidad con el índice existente.
 
 ## 2. Datos de hoja de datos
 
@@ -152,3 +151,53 @@ El libro de referencia asignaba provisionalmente /CS1 al 74HC139 U21, /OE al /RD
 No se ha modificado la ROM ni inyectado una BIOS, firmas o contenido artificial en este trabajo. La validación de la contraseña `ACE135` permanece separada.
 
 [Estado preparado a partir de fotografías de Drive, el DOCX de continuidad U11, el libro de referencia y la hoja de datos Samsung K6X1008C2D, Rev. 1.0.]
+
+
+## 9. Referencias de prueba para señales y buses aún no medidos
+
+Se revisaron las fotografías de U21 y se contrastó el pinout con Texas Instruments. U21 está identificado en la placa como 74HC139; las fotografías confirman su ubicación, pero no las redes conectadas a sus pines. Para evitar elevar la hipótesis a hecho, la lista de pines se usa únicamente como guía de continuidad.
+
+### U21 — SN74HC139N
+
+| Pin | Señal | Función |
+|---:|---|---|
+| 1 | /1G | Habilitación activa-baja, decoder 1 |
+| 2 | 1A | Selección |
+| 3 | 1B | Selección |
+| 4–7 | 1Y0–1Y3 | Salidas activas-bajas |
+| 8 | GND | Tierra |
+| 9–12 | 2Y3–2Y0 | Salidas activas-bajas |
+| 13 | 2B | Selección |
+| 14 | 2A | Selección |
+| 15 | /2G | Habilitación activa-baja, decoder 2 |
+| 16 | VCC | Alimentación |
+
+La tabla de verdad TI confirma que con G=0 una salida seleccionada pasa a bajo y las otras quedan altas; con G=1 todas quedan altas. Por tanto es eléctricamente compatible con una función de selección /CS1, pero no prueba que U21 esté conectado a U16/U17 de esa forma.
+
+### U1 — Z8S180 PLCC-68: candidatos para continuidad
+
+| Señal | Pin U1 | Uso en la matriz |
+|---|---:|---|
+| A0–A16 | 14–31 (con hueco de VSS pin 18) | Direcciones de SRAM candidatas |
+| A17 | 32 | Posible entrada de selección alta |
+| A18/TOUT | 33 | Posible entrada de selección alta; función secundaria a verificar |
+| A19 | 35 | Posible entrada de selección alta |
+| D0–D7 | 37–44 | Bus de datos candidato |
+| /MREQ | 63 | Habilitación de memoria candidata hacia U21 |
+| /WR | 66 | Control de escritura candidato hacia SRAM /WE |
+| /RD | 67 | Control de lectura candidato hacia SRAM /OE |
+
+El mapa completo pin-a-pin está en docs/SRAM_BUS_CONTINUITY_TEST_MATRIX_20261125.md. Es una guía de medición, no un resultado de continuidad.
+
+### Próximo resultado que se debe capturar
+
+1. Salida U21 que presenta continuidad con U16 pin 22 /CS1.
+2. Salida U21 que presenta continuidad con U17 pin 22 /CS1.
+3. Si /OE 24 de cada SRAM llega directamente a U1 /RD 67.
+4. Si /WE 29 de cada SRAM llega directamente a U1 /WR 66.
+5. Continuidad completa de los buses A0–A16 e I/O1–I/O8.
+6. Entradas y habilitaciones U21 que determinan el banco seleccionado.
+
+No iniciar continuidad con tensión presente. C38 conserva respaldo para SRAM: una descarga por debajo de la tensión de retención puede borrar el contenido. No cortocircuitar C38; resolver primero si debe preservarse el contenido actual y, en ese caso, cómo volcar las dos SRAM sin interrumpir su alimentación.
+
+Fuentes de referencia: TI SNx4HC139, SCLS108E Rev. E, pin configuration y functional modes; ZiLOG Z8S180/Z8L180, DS006002-ZMP0200, Figure 3 y Table 1.

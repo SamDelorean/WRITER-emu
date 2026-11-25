@@ -209,6 +209,22 @@ Se recuperó la hoja de datos que el usuario subió a `01_Investigacion_y_desarr
 - **No volver a pedir identificar los integrados ni repetir la continuidad RA3→CS2.** Esa información está en Drive y documentada.
 - Sigue pendiente: trazar `/CS1` individual de U16/U17 (se espera una función de selección de bancos, posiblemente U21 74HC139, aún no medida), `/OE`, `/WE`, bus de direcciones, bus de datos y mapa físico/bancos. Tampoco se dispone todavía de un volcado real de los 256 KiB físicos.
 
-El libro `WRITER_hardware_referencia.xlsx` conserva su hoja heredada `U_SRAM_K6T1008` y contiene un pinout incorrecto para CS1/CS2/OE/A10. **No usar esa tabla como referencia de pines** hasta actualizarla. El pinout corregido y la clasificación medida/hipótesis quedan documentados en `docs/SRAM_K6X1008C2D_HARDWARE_EVIDENCE_20261125.md`.
+El libro `WRITER_hardware_referencia.xlsx` ya fue actualizado en Drive: conserva el nombre heredado de pestaña `U_SRAM_K6T1008`, pero el título, pinout Samsung 32-SOP y clasificación de evidencia están corregidos. Solo U11 RA3 pin 2 → CS2 pin 30 está marcada como continuidad medida; las demás rutas permanecen como hipótesis. La matriz de prueba dirigida está en `docs/SRAM_BUS_CONTINUITY_TEST_MATRIX_20261125.md`.
 
 **Nuevo punto de partida:** no comenzar otro levantamiento completo. Recuperar o completar solamente la selección individual `/CS1` y las conexiones `/OE`, `/WE`, A0–A16 e I/O1–I/O8; después correlacionar la respuesta de cada chip durante `0x2206` y construir el mapa SRAM/EPROM separado. La hipótesis de bytes EPROM visibles en la ventana esperada de SRAM sigue vigente, pero el modelo requiere confirmar /CS1 y bancos antes de implementarse.
+
+
+## Matriz dirigida para cerrar /CS1, /OE, /WE y buses (2026-11-25)
+
+Se revisaron el libro de referencia, el DOCX de continuidad U11, el driver MAME y las nueve fotografías de la placa. Las fotografías confirman ubicación/marcaje de U21, pero no permiten probar continuidad entre pistas. El DOCX U11 confirma únicamente RA3→CS2 para el bloque SRAM; no contiene medidas de /CS1, /OE, /WE, A0–A16 ni I/O1–I/O8.
+
+Se creó la matriz exacta de medición: `docs/SRAM_BUS_CONTINUITY_TEST_MATRIX_20261125.md`. Referencias de pinout contrastadas:
+- U21 SN74HC139N: pinout 16 pines y ocho salidas activas-bajas según TI SCLS108E Rev. E.
+- U1 Z8S180 PLCC-68: /MREQ pin 63, /WR pin 66, /RD pin 67; A17 pin 32, A18/TOUT pin 33 y A19 pin 35, según Zilog DS006002-ZMP0200.
+- SRAM U16/U17: /CS1 pin 22, /OE pin 24, /WE pin 29 y CS2 pin 30 según K6X1008C2D_SAM.pdf.
+
+**Hipótesis de trabajo, no resultados:** /CS1 de cada SRAM podría venir de dos salidas distintas de U21; /OE podría llegar a /RD y /WE a /WR; las dos SRAM podrían compartir A0–A16 y D0–D7, con la selección individual realizada por decodificación alta. Cada una de esas relaciones requiere continuidad medida.
+
+**Advertencia de conservación:** C38 es el supercapacitor de respaldo de SRAM. Desenergizar y esperar que VCC SRAM caiga por debajo de retención puede destruir contenido físico actual. No cortocircuitar C38. Antes de realizar continuidad, decidir si debe preservarse el contenido y, de ser así, obtener primero un volcado de U16/U17 o un método de lectura que no interrumpa VCC. Nunca medir continuidad/ohmios con tensión presente.
+
+Siguiente acción física: solo después de resolver la preservación del contenido, completar la Prueba A de la matriz (U16/U17 /CS1 contra U21 Y0–Y3 de ambas mitades), luego /OE y /WE, y finalmente A0–A16 e I/O1–I/O8. No modificar el driver ni el mapa SRAM/EPROM antes de tener esos resultados.

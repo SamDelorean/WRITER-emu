@@ -104,3 +104,18 @@ No se ha validado todavía la contraseña. La pantalla de contraseña fue alcanz
 2. Seguir las rutinas PIC `0x000, 0x001, 0x00A, 0x010, 0x011, 0x015, 0x022, 0x025, 0x050, 0x059, 0x062, 0x06B` para reconstruir el origen de esos cuatro bytes y las condiciones RB2/RB3/RB7.
 3. Determinar si las teclas de contraseña entran por la matriz directa Z180, por el PIC/ASCI1 o por una combinación de ambas rutas.
 4. Solo entonces crear una prueba automatizada de ACE135 que use los mismos registros/entradas que el hardware, sin saltar la rutina de lectura de la ROM.
+
+
+### Corrección de interpretación — ASCI1 no está identificado como canal de contraseña
+
+La primera lectura de `0x062F` como posible entrada de caracteres fue prematura. El PIC confirma una función de temporización:
+
+- PIC `0x015–0x021`: incrementa una cuenta de 40 bits distribuida en `0x0C` y `0x08–0x0B`.
+- PIC `0x0B4–0x0BB`: transmite los cuatro bytes `0x08–0x0B` por RB0.
+- Z180 `0x2442–0x2456`: lee cuatro bytes mediante `0x062F` y los guarda en D011/D013.
+
+Por ello, el enlace RB0→RXA1 está confirmado como transporte de la cuenta temporal del PIC en el arranque. No hay evidencia suficiente para afirmar que transporte las letras de la contraseña. La ruta de caracteres de `ACE135` sigue abierta.
+
+La ROM compara `D03C` contra la cadena `ACE135\0` en `0x24B5–0x24BB`. El punto pendiente es identificar quién llena D03C y cómo se alimenta la cola de eventos que consume `0x0CBE` desde D08D. El único barrido directo de matriz identificado en el mapa estático de I/O es `0x0CF6`, usado en la comprobación de teclas especiales del arranque. Hay otros accesos a puertos en direcciones superiores, pero deben validarse como código ejecutable y no como falsos positivos de datos.
+
+**Estado correcto:** F1+F2 por matriz directa está demostrado; firma y estructura RAM tras Master Reset están demostradas; el ingreso real de ACE135 y el origen de D03C/D08D no están demostrados. El próximo análisis debe rastrear escritores de D03C y productores de la cola D08D, además de validar el código que escanea la matriz durante la fase de contraseña.

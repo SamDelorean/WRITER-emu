@@ -153,3 +153,14 @@ La tabla de 128 entradas de `0x0964`, con stride de cuatro bytes, permite recons
 La prueba dinámica confirma dos fases: una tecla A temprana puede entrar y salir de la FIFO antes de que se inicialice `D03C`; una A tardía sí se encola después del prompt, pero en esa ejecución `0x0D55` lee `D0AF=F8`, toma la ruta de resultado pendiente y no consume la FIFO. No se observó escritura de carácter en `D03C-D041`. La sincronización entre inicialización del búfer, espera `0x0E08`, `D0AF` y despacho FIFO sigue abierta.
 
 El informe detallado, incluyendo registros de prueba, tabla de posiciones, instrucciones y próximos pasos, está en `docs/PASSWORD_INPUT_TRACE_20261125.md`. No se ha validado todavía `ACE135`, no se ha completado Master Reset y permanece el error `Missing Application BIOS, 0x203B`.
+
+
+### Continuación — evento A posterior a la inicialización del editor (2026-11-25)
+
+Se ejecutó una prueba más precisa: Lua espera a que el editor tenga `D1E7=D03C`, `D1E9=D03C` y `D1EB=6`, y entonces pulsa A en `R3C6` (frame 137). El evento `0x00B9` se inserta correctamente en `D08D`; `D0AD` pasa de 0 a 1. Por tanto, esta vez la tecla sí llega a la FIFO después de inicializarse el búfer de contraseña.
+
+Sin embargo, no se observa una lectura de `D08D` ni una ejecución del consumidor `0x0CBE` (su lectura de `D0AD` se esperaría con `PC_NEXT=0CC2`). No hay escritura de carácter en `D03C-D041` y `D0AD` permanece en 1 hasta el snapshot final. `D0AF` todavía vale cero cuando se encola A; posteriormente se escribe `0x00F8` desde `0x0D20` y se limpia en `0x0D55`. Por orden temporal, F8 es un resultado posterior de espera, no la causa inicial de que A no sea consumida.
+
+Después del IRQ, los PCs muestreados pasan por código `0Cxx/183x` y luego por otras rutinas `106x/16xx`; no se observa el retorno normal a `0x0E29` seguido de `0x0E0F/0x0E12` y `0x0CBE`. La hipótesis de trabajo cambia: la matriz y el productor FIFO funcionan; el siguiente objetivo es reconstruir el retorno de interrupción/stack del Z180 al despertar de `SLP` y verificar por qué el flujo foreground del editor no vuelve a despachar. No se debe forzar el consumo de la FIFO ni modificar ROM.
+
+Prueba y snapshot: `diag/error.log`, `snap/password_immediate_A_20261125.bin`; script: `diag/password_immediate_A.lua`. El informe técnico detallado está en `docs/PASSWORD_INPUT_TRACE_20261125.md`. Contraseña `ACE135`, Master Reset y `Missing Application BIOS, 0x203B` siguen sin validarse/resolverse.

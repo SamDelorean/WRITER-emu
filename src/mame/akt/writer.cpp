@@ -93,6 +93,9 @@ private:
 	bool m_pic_rb2_idle_high = true;
 	bool m_test_master_reset_keys = false;
 	int m_test_master_reset_scan_reads = 0;
+	bool m_test_bypass_password_to_reset = false;
+	bool m_test_redirect_irq1_to_reset = false;
+	uint16_t m_test_saved_irq1_vector = 0;
 	bool m_trace_input_writes = false;
 	unsigned m_trace_input_write_count = 0;
 	bool m_trace_keyboard = false;
@@ -350,12 +353,12 @@ TIMER_DEVICE_CALLBACK_MEMBER(writer_state::d017_tick)
 	m_mem[0xcd017] = v & 0xff;
 	m_mem[0xcd018] = v >> 8;
 }
-// Test-only entry into the ROM's own Master Reset routine. This skips
-// only the F1+F2/password UI; all memory initialization is executed by
-// the original Z180 code at 0x2523. Never enabled unless explicitly asked.
+// Test-only entry into the ROM's own Master Reset routine. Preserve the
+// current stack so the initial CALL at 0x2523 can return normally; the ROM
+// itself switches to its D000 stack at 0x2526.
 TIMER_CALLBACK_MEMBER(writer_state::test_master_reset)
 {
-	logerror("TEST: redirecting Z180 PC to ROM Master Reset routine 2523\n");
+	logerror("TEST: redirecting Z180 PC to ROM Master Reset routine 2523 (preserving SP=%04X for its initial CALL 22F3)\n", m_maincpu->state_int(Z180_SP));
 	m_maincpu->set_pc(0x2523);
 }
 
@@ -435,6 +438,55 @@ uint32_t writer_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap
 	if (!m_ui_frame_path.empty() && (++m_ui_frame_counter % 15) == 0)
 		ui_frame_dump(screen, bitmap);
 
+	// One-shot diagnostic bypass: wait until the ROM has initialized its
+	// six-character password editor, then temporarily redirect the real IRQ1
+	// vector from 182A to 2523. The PIC's next real pulse wakes SLP and vectors
+	// the CPU into the ROM reset routine; restore 182A when ROM writes its
+	// D000/D002 initialization signatures.
+	if (m_test_bypass_password_to_reset)
+	{
+		uint16_t const pc = m_maincpu->pc();
+		uint16_t const sp = m_maincpu->state_int(Z180_SP);
+		auto rd16 = [this](uint32_t a) { return uint16_t(m_mem[a] | (m_mem[a + 1] << 8)); };
+		uint16_t const editor_buffer = rd16(0xcd1e7);
+		uint16_t const editor_cursor = rd16(0xcd1e9);
+		uint16_t const editor_length = rd16(0xcd1eb);
+		uint16_t const editor_mode = rd16(0xcd1ed);
+		bool const editor_ready = editor_buffer == 0xd03c && editor_cursor == 0xd03c &&
+			editor_length == 6 && editor_mode == 0x008c;
+		bool const editor_waiting = (pc == 0x0e27 || pc == 0x0e29);
+		if (editor_ready && editor_waiting)
+		{
+			uint16_t const vector = uint16_t(m_mem[0xcd700] | (m_mem[0xcd701] << 8));
+			if (vector == 0x182a)
+			{
+				m_test_saved_irq1_vector = vector;
+				m_mem[0xcd700] = 0x23;
+				m_mem[0xcd701] = 0x25;
+				m_test_redirect_irq1_to_reset = true;
+				logerror("TEST: password editor active (PC=%04X SP=%04X buffer=%04X cursor=%04X length=%u mode=%04X); redirected IRQ1 vector D700 %04X->2523; waiting for real PIC pulse to wake SLP\n", pc, sp, editor_buffer, editor_cursor, editor_length, editor_mode, vector);
+			}
+			else
+				logerror("TEST: password editor active but IRQ1 vector D700=%04X, expected 182A; diagnostic redirect not armed\n", vector);
+			m_test_bypass_password_to_reset = false;
+		}
+	}
+
+	// The ROM writes these signatures at 0x254E/0x2554 after completing
+	// initialization. Restore the normal interrupt handler before normal use.
+	if (m_test_redirect_irq1_to_reset &&
+		uint16_t(m_mem[0xcd000] | (m_mem[0xcd001] << 8)) == 0x916a &&
+		uint16_t(m_mem[0xcd002] | (m_mem[0xcd003] << 8)) == 0x5a3c)
+	{
+		if (uint16_t(m_mem[0xcd700] | (m_mem[0xcd701] << 8)) == 0x2523)
+		{
+			m_mem[0xcd700] = uint8_t(m_test_saved_irq1_vector);
+			m_mem[0xcd701] = uint8_t(m_test_saved_irq1_vector >> 8);
+		}
+		m_test_redirect_irq1_to_reset = false;
+		logerror("TEST: ROM reset signature D000=916A/D002=5A3C detected; restored IRQ1 vector %04X\n", m_test_saved_irq1_vector);
+	}
+
 	if (m_trace_password_flow && m_trace_password_count < 4096)
 	{
 		uint16_t const pc = m_maincpu->pc();
@@ -500,6 +552,10 @@ void writer_state::machine_start()
 		m_pic_rb2_idle_high = (rb2[0] != '0');
 	if (char const *mr = std::getenv("WRITER_TEST_MASTER_RESET_KEYS"))
 		m_test_master_reset_keys = (mr[0] == '1');
+	if (char const *bypass = std::getenv("WRITER_TEST_BYPASS_PASSWORD_TO_RESET"))
+		m_test_bypass_password_to_reset = (bypass[0] == '1');
+	if (m_test_bypass_password_to_reset)
+		logerror("TEST: one-shot password-screen bypass armed; will redirect the real IRQ1 vector after editor init, then restore it after ROM reset signatures\n");
 	if (m_test_master_reset_keys)
 		logerror("TEST: inject F1+F2 for the first firmware keyboard matrix scan\n");
 	if (char const *trace = std::getenv("WRITER_TRACE_INPUT_WRITES"))

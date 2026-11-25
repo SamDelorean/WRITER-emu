@@ -152,7 +152,7 @@ La tabla de 128 entradas de `0x0964`, con stride de cuatro bytes, permite recons
 
 La prueba dinámica confirma dos fases: una tecla A temprana puede entrar y salir de la FIFO antes de que se inicialice `D03C`; una A tardía sí se encola después del prompt, pero en esa ejecución `0x0D55` lee `D0AF=F8`, toma la ruta de resultado pendiente y no consume la FIFO. No se observó escritura de carácter en `D03C-D041`. La sincronización entre inicialización del búfer, espera `0x0E08`, `D0AF` y despacho FIFO sigue abierta.
 
-El informe detallado, incluyendo registros de prueba, tabla de posiciones, instrucciones y próximos pasos, está en `docs/PASSWORD_INPUT_TRACE_20261125.md`. No se ha validado todavía `ACE135`, no se ha completado Master Reset y permanece el error `Missing Application BIOS, 0x203B`.
+El informe detallado, incluyendo registros de prueba, tabla de posiciones, instrucciones y próximos pasos, está en `docs/PASSWORD_INPUT_TRACE_20261125.md`. No se ha validado `ACE135` ni la ruta auténtica de comparación de contraseña. La rutina ROM `0x2523` se ejecutó después mediante un bypass diagnóstico de IRQ1 y generó las firmas de inicialización; el error posterior `Missing Application BIOS, 0x203B` permanece.
 
 
 ### Continuación — evento A posterior a la inicialización del editor (2026-11-25)
@@ -163,7 +163,7 @@ Sin embargo, no se observa una lectura de `D08D` ni una ejecución del consumido
 
 Después del IRQ, los PCs muestreados pasan por código `0Cxx/183x` y luego por otras rutinas `106x/16xx`; no se observa el retorno normal a `0x0E29` seguido de `0x0E0F/0x0E12` y `0x0CBE`. La hipótesis de trabajo cambia: la matriz y el productor FIFO funcionan; el siguiente objetivo es reconstruir el retorno de interrupción/stack del Z180 al despertar de `SLP` y verificar por qué el flujo foreground del editor no vuelve a despachar. No se debe forzar el consumo de la FIFO ni modificar ROM.
 
-Prueba y snapshot: `diag/error.log`, `snap/password_immediate_A_20261125.bin`; script: `diag/password_immediate_A.lua`. El informe técnico detallado está en `docs/PASSWORD_INPUT_TRACE_20261125.md`. Contraseña `ACE135`, Master Reset y `Missing Application BIOS, 0x203B` siguen sin validarse/resolverse.
+Prueba y snapshot: `diag/error.log`, `snap/password_immediate_A_20261125.bin`; script: `diag/password_immediate_A.lua`. El informe técnico detallado está en `docs/PASSWORD_INPUT_TRACE_20261125.md`. La entrada auténtica de `ACE135` sigue sin validarse; la ejecución diagnóstica de `0x2523` está documentada en la sección final. `Missing Application BIOS, 0x203B` sigue sin resolverse.
 
 
 ### Continuación — muestreo de PC durante el bloqueo de entrada (2026-11-25)
@@ -173,3 +173,27 @@ Se añadió `WRITER_TRACE_PASSWORD_FLOW=1`, desactivado por defecto. El driver t
 En la prueba con A inmediata, el muestreo observó `PC=0x0E27`, `SP=0xCFF0`, `IFF1=1` mientras el Z180 estaba en SLP. Tras el evento, el PC muestreado pasó por `0Cxx/18xx` con IFF1=0 y luego por `106x/11xx/16xx/27xx` con IFF1=1. `D0AD` permaneció en 1 y `D0AF` en 0. No se muestrearon `0E29`, `0E0F`, `0E12` ni el consumidor `0CBE`; al ser una muestra por frame, esto no demuestra que nunca se ejecutaran entre muestras. Sí confirma que la entrada permanece pendiente durante muchos ciclos de IRQ/temporizador.
 
 El nuevo trace está en `diag/error.log` y la RAM en `snap/password_flow_A_20261125.bin`. El siguiente paso es observar la dirección de retorno y la pila al entrar/salir de IRQ1, y explicar por qué la FIFO no se atiende después del despertar. No cambiar ROM ni forzar el consumo.
+
+
+### Continuación — ejecución real de ROM `0x2523` mediante despertar IRQ1 (2026-11-25)
+
+Se consiguió ejecutar la rutina de Master Reset de la ROM sin cambiar el PC mientras el Z180 estaba dormido en `SLP`. La prueba usa `WRITER_TEST_MASTER_RESET_KEYS=1` y `WRITER_TEST_BYPASS_PASSWORD_TO_RESET=1`; no modifica bytes de ROM ni inyecta las firmas de RAM.
+
+Secuencia y evidencia:
+
+1. El chord F1+F2 alcanza `Enter Master Reset Password`. El editor está inicializado: `D1E7=D03C`, `D1E9=D03C`, `D1EB=0006`, `D1ED=008C`; el Z180 espera en `0E27`, `SP=CFF0`.
+2. El driver lee el vector real de IRQ1 en `D700-D701` (`182A`) y lo redirige temporalmente a `2523`. El PIC permanece operativo y conserva RA2→`/INT1`; no se fuerza el despertar.
+3. El siguiente pulso PIC en RA2 despierta al Z180 desde `SLP` y entrega la ejecución al destino `2523` a través del vector IRQ1. La rutina comienza con `CALL 22F3`; en `2526` la ROM instala su propia pila `SP=D000`.
+4. La ROM ejecuta sus llamadas de inicialización (`112B`, `10CC`, `10B1`, `2206`) y escribe por sí misma `D000=916A` y `D002=5A3C`. Al detectar ambas firmas, el driver restaura `D700-D701=182A`.
+5. La traza final termina en `PC=2568`, `SP=D000`, `D000=916A`, `D002=5A3C`, `D073=00`, `D011=004A`. La pantalla capturada muestra `Powering Down...`; el registro contiene `Aborting App - Fatal Error / Missing Application BIOS, 0x203B / Powering Down...`.
+
+**Resultado:** la entrada a `0x2523` y la inicialización ROM que produce las firmas están validadas. El vector original `0x182A` también se restaura. El fallo posterior `Missing Application BIOS, 0x203B` permanece. Esta prueba es un bypass diagnóstico de teclado/comparación: no demuestra que `ACE135` haya sido introducida o aceptada, ni equivale a una prueba de contraseña auténtica.
+
+Artefactos de esta ejecución:
+
+- Log: `diag/error.log` (marcadores `password editor active`, `redirected IRQ1 vector D700 182A->2523`, `ROM reset signature ... restored IRQ1 vector 182A`, `FINAL PC=2568`).
+- Build/run: `diag/build.log`.
+- RAM (ventana lógica de 64 KiB): `snap/live_snapshot_20261125_145659.bin`.
+- LCD: `snap/frame_20261125_145659.ppm` (vista PNG derivada: `snap/frame_20261125_145659.png`).
+
+**Siguiente bloqueo:** determinar qué imagen/segmento de Application BIOS espera la ROM en la ruta de error `0x203B`, y si está ausente en el dump o si no se modela el banco/medio desde el que se carga. Mantener separada esta investigación del problema de entrada de `ACE135`.

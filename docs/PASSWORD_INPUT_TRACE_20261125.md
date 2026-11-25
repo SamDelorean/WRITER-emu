@@ -75,6 +75,30 @@ Confirmed: physical keyboard matrix -> Z180 ISR -> debounce/repeat -> FIFO produ
 
 Open: arrange a test key so its event is consumed by `0x0D55` after `D03C` is initialized, then verify the corresponding character write into `D03C-D041`. After that, inject `ACE135` through the same matrix path and verify the ROM comparison at `0x24B5-0x24BB`.
 
-Not yet achieved: successful password entry, Master Reset completion, or resolution of `Missing Application BIOS, 0x203B`.
+Not achieved: authentic `ACE135` keyboard entry/ROM password acceptance, or resolution of `Missing Application BIOS, 0x203B`. The later diagnostic run documented below did execute the original `0x2523` reset routine and its RAM initialization, but bypassed keyboard entry and password comparison.
 
 All key presses in these tests were MAME Lua input-field simulations, not physical keyboard measurements. The source ROM remained unchanged.
+
+
+### Continuación — ejecución real de ROM `0x2523` mediante despertar IRQ1 (2026-11-25)
+
+Se consiguió ejecutar la rutina de Master Reset de la ROM sin cambiar el PC mientras el Z180 estaba dormido en `SLP`. La prueba usa `WRITER_TEST_MASTER_RESET_KEYS=1` y `WRITER_TEST_BYPASS_PASSWORD_TO_RESET=1`; no modifica bytes de ROM ni inyecta las firmas de RAM.
+
+Secuencia y evidencia:
+
+1. El chord F1+F2 alcanza `Enter Master Reset Password`. El editor está inicializado: `D1E7=D03C`, `D1E9=D03C`, `D1EB=0006`, `D1ED=008C`; el Z180 espera en `0E27`, `SP=CFF0`.
+2. El driver lee el vector real de IRQ1 en `D700-D701` (`182A`) y lo redirige temporalmente a `2523`. El PIC permanece operativo y conserva RA2→`/INT1`; no se fuerza el despertar.
+3. El siguiente pulso PIC en RA2 despierta al Z180 desde `SLP` y entrega la ejecución al destino `2523` a través del vector IRQ1. La rutina comienza con `CALL 22F3`; en `2526` la ROM instala su propia pila `SP=D000`.
+4. La ROM ejecuta sus llamadas de inicialización (`112B`, `10CC`, `10B1`, `2206`) y escribe por sí misma `D000=916A` y `D002=5A3C`. Al detectar ambas firmas, el driver restaura `D700-D701=182A`.
+5. La traza final termina en `PC=2568`, `SP=D000`, `D000=916A`, `D002=5A3C`, `D073=00`, `D011=004A`. La pantalla capturada muestra `Powering Down...`; el registro contiene `Aborting App - Fatal Error / Missing Application BIOS, 0x203B / Powering Down...`.
+
+**Resultado:** la entrada a `0x2523` y la inicialización ROM que produce las firmas están validadas. El vector original `0x182A` también se restaura. El fallo posterior `Missing Application BIOS, 0x203B` permanece. Esta prueba es un bypass diagnóstico de teclado/comparación: no demuestra que `ACE135` haya sido introducida o aceptada, ni equivale a una prueba de contraseña auténtica.
+
+Artefactos de esta ejecución:
+
+- Log: `diag/error.log` (marcadores `password editor active`, `redirected IRQ1 vector D700 182A->2523`, `ROM reset signature ... restored IRQ1 vector 182A`, `FINAL PC=2568`).
+- Build/run: `diag/build.log`.
+- RAM (ventana lógica de 64 KiB): `snap/live_snapshot_20261125_145659.bin`.
+- LCD: `snap/frame_20261125_145659.ppm` (vista PNG derivada: `snap/frame_20261125_145659.png`).
+
+**Siguiente bloqueo:** determinar qué imagen/segmento de Application BIOS espera la ROM en la ruta de error `0x203B`, y si está ausente en el dump o si no se modela el banco/medio desde el que se carga. Mantener separada esta investigación del problema de entrada de `ACE135`.

@@ -13,7 +13,9 @@ The previous PIC/Z180 boot deadlock has been resolved at the interconnect level.
 - PIC RB2 defaults high as the inactive J1 input level in the emulator; the physical idle voltage still needs measurement.
 - PIC RB3 currently models aggregate keyboard activity; its exact connection to U9 2A1 and the corresponding matrix column remain to be identified.
 
-The firmware recognizes the F1+F2 Master Reset chord (F1=R2C6, F2=R6C6) and reaches the password prompt. The original ROM Master Reset routine was then executed in the emulator. It generated the expected RAM signature at D000–D003 and initialized the observed D800–EFFF areas. This is a real ROM-generated result, not an injected signature.
+The firmware recognizes the F1+F2 Master Reset chord (F1=R2C6, F2=R6C6) and reaches the password prompt. A diagnostic IRQ1-vector redirect lets the next real PIC pulse wake the Z180 from `SLP` into the original ROM routine at `0x2523`. The routine executes its initialization and writes the expected signatures `D000=916A` and `D002=5A3C`; the original IRQ1 vector `0x182A` is restored afterward. This is a real ROM-generated result, not an injected signature.
+
+This test bypasses keyboard entry and password comparison. It does **not** validate `ACE135`. After the reset routine, the firmware reaches the `Powering Down...` path with `Missing Application BIOS, 0x203B`; application BIOS availability/loading remains unresolved.
 
 After that initialization, the next failure is:
 
@@ -72,6 +74,7 @@ Diagnostic overrides:
 - `WRITER_UI_FRAME_FILE=/path/to/frame.ppm` saves the rendered LCD frame.
 - `WRITER_TEST_MASTER_RESET_KEYS=1` injects the F1+F2 chord for one diagnostic matrix scan.
 - `WRITER_TEST_EXECUTE_MASTER_RESET=1` redirects the Z180 PC to the original ROM reset routine after two emulated seconds; test-only.
+- `WRITER_TEST_BYPASS_PASSWORD_TO_RESET=1` waits for the password editor to initialize, temporarily redirects the actual IRQ1 vector at `D700` from `0x182A` to ROM reset entry `0x2523`, then lets the next real PIC pulse wake the Z180 from `SLP`. ROM executes the initial `CALL 0x22F3`, installs its own `SP=D000`, and performs initialization. When ROM writes `D000=916A` and `D002=5A3C`, the diagnostic restores the original IRQ1 vector `0x182A`. This bypasses keyboard entry and password comparison but preserves the real interrupt wake path. Combine with `WRITER_TEST_MASTER_RESET_KEYS=1` to reach the password screen.
 - `WRITER_TEST_VALID_RAM_SIGNATURE=1` injects only the two signature words as an experimental control; it is not a reset and must not be used as a normal boot workaround.
 - `WRITER_TRACE_INPUT_WRITES=1` traces writes to the password buffer and event FIFO in the physical `CD000-CDFFF` RAM window.
 - `WRITER_TRACE_INPUT_READS=1` traces reads of the FIFO count (`D0AD`) and pending result (`D0AF`).

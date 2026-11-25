@@ -143,3 +143,8 @@ The revised `build_writerdiag.sh` completed an end-to-end build, ROM validation 
 - D700 still contains `2A 18`.
 
 PC `0x16A4` is a helper routine ending at `0x16C0`; the final PC is simply where the 30-second stop occurred, not evidence of a loop. The RAM snapshot and trace are preserved as `ram_c0000_cffff_boot_warning_30s_no_d017.bin` and `mame_boot_warning_30s_no_d017.log` under `analysis_20261125/out/`.
+
+
+## Subsequent update — ROM reset entry validated (2026-11-25)
+
+The statement above that no Master Reset had been executed describes the state at the time of that boot-blocker investigation. A later controlled run is recorded in `RECOVERY_STATUS_AND_NEXT_START_20261125.md` and `PASSWORD_INPUT_TRACE_20261125.md`: the driver temporarily redirected IRQ1 vector `D700` from `0x182A` to `0x2523`; the real PIC RA2 pulse woke the Z180 from `SLP`; the ROM routine initialized RAM, wrote `D000=916A` and `D002=5A3C`, and the driver restored vector `0x182A`. This bypass did not validate `ACE135`. The subsequent `Missing Application BIOS, 0x203B` / `Powering Down...` condition remains unresolved.

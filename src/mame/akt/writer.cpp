@@ -86,6 +86,8 @@ private:
 	std::unique_ptr<uint8_t[]> m_mem;
 	uint8_t m_kb_strobe = 0;
 	int m_pic_ra2_last = -1;
+	int m_pic_ra3_last = -1;
+	bool m_trace_pic_ra3 = false;
 	int m_pic_rb0_last = -1;
 	int m_pic_portb_last = -1;
 	int m_z180_txa1 = 1;
@@ -166,6 +168,12 @@ private:
 	// drive IRQ1 from RA2. RB0 -> RXA1 is also wired in pic_portb_w().
 	void pic_porta_w(uint8_t data)
 	{
+		const int ra3_high = BIT(data, 3);
+		if (m_trace_pic_ra3 && ra3_high != m_pic_ra3_last) {
+			logerror("PIC RA3/CS2=%d PORTA=%02X PICPC=%03X Z180PC=%04X\n",
+				ra3_high, data, m_piccpu->pc(), m_maincpu->pc());
+			m_pic_ra3_last = ra3_high;
+		}
 		const int ra2_high = BIT(data, 2);
 		m_maincpu->set_input_line(Z180_INPUT_LINE_IRQ1, ra2_high ? CLEAR_LINE : ASSERT_LINE);
 		if (ra2_high != m_pic_ra2_last) {
@@ -550,6 +558,10 @@ void writer_state::machine_start()
 	}
 	if (char const *rb2 = std::getenv("WRITER_PIC_RB2"))
 		m_pic_rb2_idle_high = (rb2[0] != '0');
+	if (char const *trace = std::getenv("WRITER_TRACE_PIC_RA3"))
+		m_trace_pic_ra3 = (trace[0] == '1');
+	if (m_trace_pic_ra3)
+		logerror("PIC RA3/CS2 transition trace enabled; diagnostic only, no SRAM gating modeled\n");
 	if (char const *mr = std::getenv("WRITER_TEST_MASTER_RESET_KEYS"))
 		m_test_master_reset_keys = (mr[0] == '1');
 	if (char const *bypass = std::getenv("WRITER_TEST_BYPASS_PASSWORD_TO_RESET"))

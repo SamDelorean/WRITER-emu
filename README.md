@@ -27,6 +27,8 @@ Powering Down...
 
 The Application BIOS failure has now been traced one level deeper: ROM routine `0x20FF` searches index `0x12` for `SHELL`, but the corresponding table entry `D0DF` is zero. The ROM scan routine `0x2206` maps logical `F000` to physical `0x40000` (`CBR=31`, `CBAR=F0`) and expects a `3C 5A` block header there. The supplied EPROM has `FF 00` at that signature position and no `3C 5A` markers in `0x40000–0x7FFFF`, a 256 KiB window matching the documented total SRAM capacity. The current flat 1 MiB writable ROM shadow does not model separate SRAM or persistence, so the leading explanation is a missing SRAM overlay/image; exact chip-select decoding and real SRAM contents remain to be verified. See [Application BIOS storage scan analysis](docs/APPLICATION_BIOS_STORAGE_SCAN_20261125.md).
 
+A dynamic PIC trace now confirms RA3→CS2 changes state: PORTA `00` drives RA3 low and PORTA `0C` drives it high, synchronized with the PIC's RA2/IRQ1 pulse. RA3 remains high across the interval that includes ROM scan routine `0x2206`, then returns low as the Z180 goes back to SLP. This establishes the firmware timing relationship but does not establish the SRAM chip's active polarity or physical address decode. See [PIC RA3 / SRAM CS2 trace](docs/RA3_SRAM_CS2_TRACE_20261125.md).
+
 Password-key capture remains a separate unresolved path. The 64 KiB RAM capture is only the logical `0000–FFFF` window, not the complete 256 KiB physical SRAM image.
 
 `MACHINE_NOT_WORKING` remains set. This is not yet a complete hardware emulator.

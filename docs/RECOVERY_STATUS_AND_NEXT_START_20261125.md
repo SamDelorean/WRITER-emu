@@ -196,4 +196,4 @@ Artefactos de esta ejecución:
 - RAM (ventana lógica de 64 KiB): `snap/live_snapshot_20261125_145659.bin`.
 - LCD: `snap/frame_20261125_145659.ppm` (vista PNG derivada: `snap/frame_20261125_145659.png`).
 
-**Siguiente bloqueo:** determinar qué imagen/segmento de Application BIOS espera la ROM en la ruta de error `0x203B`, y si está ausente en el dump o si no se modela el banco/medio desde el que se carga. Mantener separada esta investigación del problema de entrada de `ACE135`.
+**Siguiente bloqueo (actualizado):** confirmar el mapa físico de U16/U17 y obtener su contenido real. La búsqueda de Application BIOS ya está trazada hasta la tabla `D0BB` y la ventana física `0x40000–0x7FFFF`; el análisis se registra en `docs/APPLICATION_BIOS_STORAGE_SCAN_20261125.md`. Mantener separada esta investigación del problema de entrada de `ACE135`.

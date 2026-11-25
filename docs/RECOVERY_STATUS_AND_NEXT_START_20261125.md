@@ -164,3 +164,12 @@ Sin embargo, no se observa una lectura de `D08D` ni una ejecución del consumido
 Después del IRQ, los PCs muestreados pasan por código `0Cxx/183x` y luego por otras rutinas `106x/16xx`; no se observa el retorno normal a `0x0E29` seguido de `0x0E0F/0x0E12` y `0x0CBE`. La hipótesis de trabajo cambia: la matriz y el productor FIFO funcionan; el siguiente objetivo es reconstruir el retorno de interrupción/stack del Z180 al despertar de `SLP` y verificar por qué el flujo foreground del editor no vuelve a despachar. No se debe forzar el consumo de la FIFO ni modificar ROM.
 
 Prueba y snapshot: `diag/error.log`, `snap/password_immediate_A_20261125.bin`; script: `diag/password_immediate_A.lua`. El informe técnico detallado está en `docs/PASSWORD_INPUT_TRACE_20261125.md`. Contraseña `ACE135`, Master Reset y `Missing Application BIOS, 0x203B` siguen sin validarse/resolverse.
+
+
+### Continuación — muestreo de PC durante el bloqueo de entrada (2026-11-25)
+
+Se añadió `WRITER_TRACE_PASSWORD_FLOW=1`, desactivado por defecto. El driver toma una muestra por frame de PC, SP, IFF1/IFF2, D011/D017, D0AD/D0AF y punteros del editor. La compilación de `writerdiag` terminó correctamente.
+
+En la prueba con A inmediata, el muestreo observó `PC=0x0E27`, `SP=0xCFF0`, `IFF1=1` mientras el Z180 estaba en SLP. Tras el evento, el PC muestreado pasó por `0Cxx/18xx` con IFF1=0 y luego por `106x/11xx/16xx/27xx` con IFF1=1. `D0AD` permaneció en 1 y `D0AF` en 0. No se muestrearon `0E29`, `0E0F`, `0E12` ni el consumidor `0CBE`; al ser una muestra por frame, esto no demuestra que nunca se ejecutaran entre muestras. Sí confirma que la entrada permanece pendiente durante muchos ciclos de IRQ/temporizador.
+
+El nuevo trace está en `diag/error.log` y la RAM en `snap/password_flow_A_20261125.bin`. El siguiente paso es observar la dirección de retorno y la pila al entrar/salir de IRQ1, y explicar por qué la FIFO no se atiende después del despertar. No cambiar ROM ni forzar el consumo.

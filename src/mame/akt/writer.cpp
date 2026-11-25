@@ -99,6 +99,9 @@ private:
 	unsigned m_trace_keyboard_count = 0;
 	bool m_trace_input_reads = false;
 	unsigned m_trace_input_read_count = 0;
+	bool m_trace_password_flow = false;
+	uint16_t m_trace_password_last_pc = 0xffff;
+	unsigned m_trace_password_count = 0;
 	emu_timer *m_test_master_reset_timer = nullptr;
 
 	uint16_t kb_sense();
@@ -432,6 +435,26 @@ uint32_t writer_state::screen_update(screen_device &screen, bitmap_ind16 &bitmap
 	if (!m_ui_frame_path.empty() && (++m_ui_frame_counter % 15) == 0)
 		ui_frame_dump(screen, bitmap);
 
+	if (m_trace_password_flow && m_trace_password_count < 4096)
+	{
+		uint16_t const pc = m_maincpu->pc();
+		if (pc != m_trace_password_last_pc)
+		{
+			uint16_t const sp = m_maincpu->state_int(Z180_SP);
+			logerror("PASSPC pc=%04X sp=%04X iff1=%d iff2=%d d0ad=%04X d0af=%04X d011=%04X d017=%04X d1e7=%04X d1e9=%04X d1eb=%04X\n",
+				pc, sp, int(m_maincpu->state_int(Z180_IFF1)), int(m_maincpu->state_int(Z180_IFF2)),
+				unsigned(m_mem[0xcd0ad] | (m_mem[0xcd0ae] << 8)),
+				unsigned(m_mem[0xcd0af] | (m_mem[0xcd0b0] << 8)),
+				unsigned(m_mem[0xcd011] | (m_mem[0xcd012] << 8)),
+				unsigned(m_mem[0xcd017] | (m_mem[0xcd018] << 8)),
+				unsigned(m_mem[0xcd1e7] | (m_mem[0xcd1e8] << 8)),
+				unsigned(m_mem[0xcd1e9] | (m_mem[0xcd1ea] << 8)),
+				unsigned(m_mem[0xcd1eb] | (m_mem[0xcd1ec] << 8)));
+			m_trace_password_last_pc = pc;
+			++m_trace_password_count;
+		}
+	}
+
 	return 0;
 }
 
@@ -485,6 +508,10 @@ void writer_state::machine_start()
 		m_trace_keyboard = (trace[0] == '1');
 	if (char const *trace = std::getenv("WRITER_TRACE_INPUT_READS"))
 		m_trace_input_reads = (trace[0] == '1');
+	if (char const *trace = std::getenv("WRITER_TRACE_PASSWORD_FLOW"))
+		m_trace_password_flow = (trace[0] == '1');
+	if (m_trace_password_flow)
+		logerror("PASSWORD FLOW TRACE enabled: sampled PC/SP/IFF and editor/FIFO state once per frame; cap=4096\n");
 	if (m_trace_input_writes)
 	{
 		// Passive Z180 program-space watchpoints. The callback observes the

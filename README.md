@@ -75,6 +75,7 @@ Diagnostic overrides:
 - `WRITER_TEST_VALID_RAM_SIGNATURE=1` injects only the two signature words as an experimental control; it is not a reset and must not be used as a normal boot workaround.
 - `WRITER_TRACE_INPUT_WRITES=1` traces writes to the password buffer and event FIFO in the physical `CD000-CDFFF` RAM window.
 - `WRITER_TRACE_INPUT_READS=1` traces reads of the FIFO count (`D0AD`) and pending result (`D0AF`).
+- `WRITER_TRACE_PASSWORD_FLOW=1` samples Z180 PC/SP, interrupt flags, timer and password-editor/FIFO state once per frame (diagnostic only; disabled by default).
 - `WRITER_TRACE_KEYBOARD=1` traces matrix strobes and reads; verbose and capped at 4096 records.
 
 ## Ghidra and evidence

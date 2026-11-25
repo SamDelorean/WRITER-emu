@@ -6,6 +6,7 @@ Continued from commit `76f0c8e` (`Trace Writer event queue consumer`). No ROM by
 
 - `WRITER_TRACE_INPUT_WRITES=1`: writes to physical `0xCD03C-0xCD041` and `0xCD08D-0xCD0AF`.
 - `WRITER_TRACE_INPUT_READS=1`: reads of physical `0xCD0AD-0xCD0B0` (FIFO count and pending result).
+- `WRITER_TRACE_PASSWORD_FLOW=1`: samples PC, SP, IFF1/IFF2, timer, FIFO and editor pointers once per rendered frame (capped at 4096 PC changes).
 - `WRITER_TRACE_KEYBOARD=1`: keyboard strobe and matrix reads.
 
 The physical address correction is important: logical `D000-DFFF` is in the Z180 RAM window at physical `CD000-CDFFF`. Earlier taps at `0x0Dxxx` were on the wrong physical range.
@@ -62,7 +63,11 @@ The high byte of the queued event carries the modifier mask. A simulated `R0C0` 
 - After the key interrupt, the sampled PC moves through the keyboard/interrupt-side addresses (`0Cxx`, `183x`) and then other routines (`106x`, `16xx`); it is not observed returning to a foreground `0x0D55 -> 0x0CBE` consume sequence. The exact reason the wait/editor foreground path is not servicing the queued event remains open. The test is evidence of a wake/return/foreground-dispatch problem, not a bad character-table mapping.
 - LCD writes in the same run explicitly displayed `Enter Master Reset Password: [ ]`.
 
-This narrows the remaining issue: matrix scan and FIFO production work, and the editor buffer is initialized; the missing transition is from the interrupt-side enqueue back to the foreground consumer/editor. Next instrumentation should trace the Z180 interrupt return address/stack and confirm whether execution resumes at `0x0E29` after SLP, then whether `0x0E0F/0x0E12` is re-entered. Do not alter the ROM or force FIFO consumption until this control-flow defect is understood.
+This narrows the remaining issue: matrix scan and FIFO production work, and the editor buffer is initialized; the missing transition is from the interrupt-side enqueue back to the foreground consumer/editor.
+
+A follow-up run enabled frame-sampled `WRITER_TRACE_PASSWORD_FLOW`. It captured `PC=0x0E27`, `SP=0xCFF0`, `IFF1=1` while sleeping. After the key event, samples moved through `0x0Cxx` and `0x18xx` with `IFF1=0`; later samples returned to `IFF1=1` code around `0x106x/0x11xx/0x16xx/0x27xx`, with `D0AD=1` and `D0AF=0` still unchanged. The trace did not sample `0x0E29`, `0x0E0F`, `0x0E12`, or the `0x0CBE` consumer. This is a frame-rate sample, not an instruction trace, so it cannot prove those PCs were never executed between frames. It does show the event remains pending across many timer/IRQ cycles.
+
+Next instrumentation should trace the Z180 interrupt return address/stack and determine why the pending FIFO entry is not serviced after wake. Do not alter the ROM or force FIFO consumption until this control-flow defect is understood.
 
 ## Current status and next step
 

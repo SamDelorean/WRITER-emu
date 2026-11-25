@@ -136,3 +136,20 @@ Los únicos usos directos de `D08D` en el listado son las lecturas y el desplaza
 Los supuestos accesos `OUT0 (0x82)` en `0x82CF` e `IN0 B,(0x82)` en `0x83D9` están rodeados de bytes desensamblados como instrucciones incoherentes y no forman una secuencia de control plausible. Se clasifican como falsos positivos probables por desensamblado de datos; no son evidencia de un escáner de teclado.
 
 **Conclusión de esta pasada:** está demostrado el formato y consumo de la cola de eventos y el despacho por tabla; no está localizado su productor ni el escritor de `D03C`. La siguiente prueba debe instrumentar escrituras en `D03C` y `D08D` durante la pantalla de contraseña, y registrar PC/HL/DE/BC al producirse cada escritura. En paralelo, hay que recuperar/desensamblar el bloque de tabla y manejadores desde `0x0964` y el código de interrupción asociado. No se debe inyectar ACE135 ni modificar la lógica de entrada hasta identificar esa ruta.
+
+### Continuación — productor FIFO y matriz de caracteres (2026-11-25)
+
+La instrumentación dinámica corrigió el mapeo físico de la RAM: las direcciones lógicas `D000-DFFF` observadas por la ROM corresponden a la ventana física `CD000-CDFFF`. Los write taps en `CD03C-CD041` y `CD08D-CD0AF`, junto con read taps en `CD0AD-CD0B0`, no alteran las lecturas/escrituras originales.
+
+Se localizó el productor que faltaba:
+
+- ISR `0x182A` llama a `0x0C40`.
+- `0x0C40` gestiona antirrebote/repetición; llama al escáner `0x0BE2`, a la lectura de modificadores `0x0B64` y al encolador `0x0C22`.
+- `0x0C22` inserta eventos de 16 bits en `D08D + 2*D0AD`; `D0AD` cuenta eventos. La capacidad inferida es 16 eventos.
+- `0x0BE2` escanea la matriz mediante puerto `0x40` y lecturas `0x80/0x82`; `0x0BD3` resuelve el índice de tecla.
+
+La tabla de 128 entradas de `0x0964`, con stride de cuatro bytes, permite reconstruir las posiciones y códigos de `ACE135`: A `R3C6/B9`, C `R2C10/A5`, E `R0C10/85`, 1 `R1C6/99`, 3 `R1C10/95`, 5 `R4C14/C1`. El byte alto del evento transporta modificadores.
+
+La prueba dinámica confirma dos fases: una tecla A temprana puede entrar y salir de la FIFO antes de que se inicialice `D03C`; una A tardía sí se encola después del prompt, pero en esa ejecución `0x0D55` lee `D0AF=F8`, toma la ruta de resultado pendiente y no consume la FIFO. No se observó escritura de carácter en `D03C-D041`. La sincronización entre inicialización del búfer, espera `0x0E08`, `D0AF` y despacho FIFO sigue abierta.
+
+El informe detallado, incluyendo registros de prueba, tabla de posiciones, instrucciones y próximos pasos, está en `docs/PASSWORD_INPUT_TRACE_20261125.md`. No se ha validado todavía `ACE135`, no se ha completado Master Reset y permanece el error `Missing Application BIOS, 0x203B`.

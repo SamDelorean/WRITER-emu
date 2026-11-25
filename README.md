@@ -73,6 +73,9 @@ Diagnostic overrides:
 - `WRITER_TEST_MASTER_RESET_KEYS=1` injects the F1+F2 chord for one diagnostic matrix scan.
 - `WRITER_TEST_EXECUTE_MASTER_RESET=1` redirects the Z180 PC to the original ROM reset routine after two emulated seconds; test-only.
 - `WRITER_TEST_VALID_RAM_SIGNATURE=1` injects only the two signature words as an experimental control; it is not a reset and must not be used as a normal boot workaround.
+- `WRITER_TRACE_INPUT_WRITES=1` traces writes to the password buffer and event FIFO in the physical `CD000-CDFFF` RAM window.
+- `WRITER_TRACE_INPUT_READS=1` traces reads of the FIFO count (`D0AD`) and pending result (`D0AF`).
+- `WRITER_TRACE_KEYBOARD=1` traces matrix strobes and reads; verbose and capped at 4096 records.
 
 ## Ghidra and evidence
 
@@ -82,7 +85,7 @@ Local analysis workspace:
 /home/spc/projects/WRITER_INSTRUCTOR/willem/ghidra_writer/
 ```
 
-The 2026-11-21 analysis outputs are under `analysis_20261121/out/`. The 2026-11-25 reports record the IRQ1 vector correction, Master Reset path and post-reset Application BIOS failure. Diagnostic RAM captures and the run log are preserved under the project's `snap/` and `diag/` folders and in the project Drive archive.
+The 2026-11-21 analysis outputs are under `analysis_20261121/out/`. The 2026-11-25 reports record the IRQ1 vector correction, Master Reset path, Application BIOS failure, and the keyboard/FIFO/password-input trace in `docs/PASSWORD_INPUT_TRACE_20261125.md`. Diagnostic RAM captures and the run log are preserved under the project's `snap/` and `diag/` folders and in the project Drive archive.
 
 ## Legal and license
 

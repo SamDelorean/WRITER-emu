@@ -93,6 +93,12 @@ private:
 	bool m_pic_rb2_idle_high = true;
 	bool m_test_master_reset_keys = false;
 	int m_test_master_reset_scan_reads = 0;
+	bool m_trace_input_writes = false;
+	unsigned m_trace_input_write_count = 0;
+	bool m_trace_keyboard = false;
+	unsigned m_trace_keyboard_count = 0;
+	bool m_trace_input_reads = false;
+	unsigned m_trace_input_read_count = 0;
 	emu_timer *m_test_master_reset_timer = nullptr;
 
 	uint16_t kb_sense();
@@ -100,7 +106,7 @@ private:
 	bool z180_halt_pin_asserted() const;
 	uint8_t pic_portb_r();
 	void z180_txa1_w(int state) { m_z180_txa1 = state; }
-	void kb_strobe_w(uint8_t data) { m_kb_strobe = data; }
+	void kb_strobe_w(uint8_t data);
 	uint8_t kb_sense_lo_r() { return kb_sense() & 0xff; }
 	uint8_t kb_sense_hi_r() { return kb_sense() >> 8; }
 	uint8_t ext_io_r(offs_t offset);
@@ -235,7 +241,19 @@ uint16_t writer_state::kb_sense()
 			logerror("TEST MASTER RESET KEY chord released\n");
 		}
 	}
+	if (m_trace_keyboard && m_trace_keyboard_count < 4096)
+	{
+		logerror("KBREAD strobe=%02X value=%04X PC_NEXT=%04X\n", m_kb_strobe, v, m_maincpu->pc());
+		++m_trace_keyboard_count;
+	}
 	return v;
+}
+
+void writer_state::kb_strobe_w(uint8_t data)
+{
+	m_kb_strobe = data;
+	if (m_trace_keyboard && m_trace_keyboard_count < 4096)
+		logerror("KBSTROBE value=%02X PC_NEXT=%04X\n", data, m_maincpu->pc());
 }
 
 bool writer_state::any_key_pressed()
@@ -461,6 +479,52 @@ void writer_state::machine_start()
 		m_test_master_reset_keys = (mr[0] == '1');
 	if (m_test_master_reset_keys)
 		logerror("TEST: inject F1+F2 for the first firmware keyboard matrix scan\n");
+	if (char const *trace = std::getenv("WRITER_TRACE_INPUT_WRITES"))
+		m_trace_input_writes = (trace[0] == '1');
+	if (char const *trace = std::getenv("WRITER_TRACE_KEYBOARD"))
+		m_trace_keyboard = (trace[0] == '1');
+	if (char const *trace = std::getenv("WRITER_TRACE_INPUT_READS"))
+		m_trace_input_reads = (trace[0] == '1');
+	if (m_trace_input_writes)
+	{
+		// Passive Z180 program-space watchpoints. The callback observes the
+		// write data and CPU state without replacing or modifying the write.
+		auto &space = m_maincpu->space(AS_PROGRAM);
+		space.install_write_tap(0x0cd03c, 0x0cd041, "writer_password_buffer",
+			[this] (offs_t offset, u8 &data, u8) {
+				if (m_trace_input_write_count++ < 4096)
+					logerror("INWRITE BUF addr=%05X data=%02X PC_NEXT=%04X HL=%04X DE=%04X BC=%04X IFF1=%d IFF2=%d\n",
+						unsigned(offset), data, m_maincpu->pc(),
+						unsigned(m_maincpu->state_int(Z180_HL)),
+						unsigned(m_maincpu->state_int(Z180_DE)),
+						unsigned(m_maincpu->state_int(Z180_BC)),
+						int(m_maincpu->state_int(Z180_IFF1)), int(m_maincpu->state_int(Z180_IFF2)));
+			});
+		space.install_write_tap(0x0cd08d, 0x0cd0af, "writer_event_queue",
+			[this] (offs_t offset, u8 &data, u8) {
+				if (m_trace_input_write_count++ < 4096)
+					logerror("INWRITE QUEUE addr=%05X data=%02X PC_NEXT=%04X HL=%04X DE=%04X BC=%04X IFF1=%d IFF2=%d\n",
+						unsigned(offset), data, m_maincpu->pc(),
+						unsigned(m_maincpu->state_int(Z180_HL)),
+						unsigned(m_maincpu->state_int(Z180_DE)),
+						unsigned(m_maincpu->state_int(Z180_BC)),
+						int(m_maincpu->state_int(Z180_IFF1)), int(m_maincpu->state_int(Z180_IFF2)));
+			});
+		logerror("INPUT WRITE TRACE enabled: CD03C-CD041 and CD08D-CD0AF (physical window for logical D03C/D08D); cap=4096\n");
+	}
+	if (m_trace_input_reads)
+	{
+		auto &space = m_maincpu->space(AS_PROGRAM);
+		for (offs_t address : { offs_t(0x0cd0ad), offs_t(0x0cd0ae), offs_t(0x0cd0af), offs_t(0x0cd0b0) })
+			space.install_read_tap(address, address, "writer_input_state_read",
+				[this] (offs_t offset, u8 &data, u8) {
+					if (m_trace_input_read_count++ < 4096)
+						logerror("INREAD STATE addr=%05X data=%02X PC_NEXT=%04X IFF1=%d IFF2=%d\n",
+							unsigned(offset), data, m_maincpu->pc(),
+							int(m_maincpu->state_int(Z180_IFF1)), int(m_maincpu->state_int(Z180_IFF2)));
+				});
+		logerror("INPUT READ TRACE enabled: D0AD/D0AE queue count and D0AF/D0B0 pending state; cap=4096\n");
+	}
 	if (m_pic_force_wake_reads)
 		logerror("TEST: one-shot PIC RB3 keyboard-wake pulse (%d PORTB reads)\n", m_pic_force_wake_reads);
 	if (char const *mr = std::getenv("WRITER_TEST_EXECUTE_MASTER_RESET"))

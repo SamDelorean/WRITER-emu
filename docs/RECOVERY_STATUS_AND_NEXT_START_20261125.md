@@ -119,3 +119,20 @@ Por ello, el enlace RB0→RXA1 está confirmado como transporte de la cuenta tem
 La ROM compara `D03C` contra la cadena `ACE135\0` en `0x24B5–0x24BB`. El punto pendiente es identificar quién llena D03C y cómo se alimenta la cola de eventos que consume `0x0CBE` desde D08D. El único barrido directo de matriz identificado en el mapa estático de I/O es `0x0CF6`, usado en la comprobación de teclas especiales del arranque. Hay otros accesos a puertos en direcciones superiores, pero deben validarse como código ejecutable y no como falsos positivos de datos.
 
 **Estado correcto:** F1+F2 por matriz directa está demostrado; firma y estructura RAM tras Master Reset están demostradas; el ingreso real de ACE135 y el origen de D03C/D08D no están demostrados. El próximo análisis debe rastrear escritores de D03C y productores de la cola D08D, además de validar el código que escanea la matriz durante la fase de contraseña.
+
+
+### Continuación — consumidor de eventos y descarte de falsos positivos (2026-11-25)
+
+El análisis de `0x0CBE`, `0x0D55` y el flujo `0x2492–0x24BB` permite precisar la ruta:
+
+- `0x0CBE` es el consumidor FIFO. Lee el contador de elementos de 16 bits en `D0AD`; toma el primer elemento de dos bytes desde `D08D`, decrementa el contador y desplaza el resto de la cola hacia el inicio con `LDIR`.
+- `0x0D55` primero revisa `D0AF`. Si hay un manejador diferido, lo consume y salta a `0x0E05`; si no, llama a `0x0CBE`. El valor obtenido se normaliza y se usa como índice para despachar mediante una tabla de punteros en `0x0964` (`JP (HL)`). El listado estático disponible termina en `0x0963`, por lo que aún no se han identificado los manejadores de esa tabla.
+- `0x0D20` registra un puntero/valor en `D0AF`; `0x0E9B–0x0EBB` inicializa el estado de eventos, poniendo a cero `D0AD`, `D0AF`, `D08A`, `D088` y `D089`.
+- `0x24B5` compara el contenido de `D03C` con la contraseña. `0x27C1` recorre una cadena terminada en NUL y convierte letras minúsculas a mayúsculas in situ. Esto es normalización, no captura de teclado.
+- `0x267D` no escribe en `D03C`: carga el carácter `'*'` y salta a `0x257A`, una ruta de salida/formateo. Por tanto, no es el productor del búfer de contraseña.
+
+Los únicos usos directos de `D08D` en el listado son las lecturas y el desplazamiento de `0x0CBE`; no aparece un escritor absoluto de la cola. El productor probablemente utiliza direccionamiento indirecto, otro segmento de código o una ruta de interrupción no cubierta por el desensamblado lineal. `D08A` se inicializa, pero tampoco tiene referencias directas adicionales en este listado; no se le asigna todavía una función sin más evidencia.
+
+Los supuestos accesos `OUT0 (0x82)` en `0x82CF` e `IN0 B,(0x82)` en `0x83D9` están rodeados de bytes desensamblados como instrucciones incoherentes y no forman una secuencia de control plausible. Se clasifican como falsos positivos probables por desensamblado de datos; no son evidencia de un escáner de teclado.
+
+**Conclusión de esta pasada:** está demostrado el formato y consumo de la cola de eventos y el despacho por tabla; no está localizado su productor ni el escritor de `D03C`. La siguiente prueba debe instrumentar escrituras en `D03C` y `D08D` durante la pantalla de contraseña, y registrar PC/HL/DE/BC al producirse cada escritura. En paralelo, hay que recuperar/desensamblar el bloque de tabla y manejadores desde `0x0964` y el código de interrupción asociado. No se debe inyectar ACE135 ni modificar la lógica de entrada hasta identificar esa ruta.

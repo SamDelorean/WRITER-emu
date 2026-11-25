@@ -72,3 +72,35 @@ No se ejecutó un borrado físico ni se modificó hardware real. La rutina de RO
 ## Resultado ejecutivo
 
 Se resolvió el bloqueo de comunicación PIC/IRQ1. Se demostró que el firmware reconoce F1+F2 y que la rutina original de Master Reset genera la firma y estructura inicial de RAM en las áreas observadas. El siguiente obstáculo es `Missing Application BIOS, 0x203B`. El próximo trabajo debe centrarse en la captura de contraseña, el formato de almacenamiento y la localización/carga de la Application BIOS, no en volver a forzar la firma de RAM.
+
+
+## Nueva investigación — ruta de entrada de contraseña (2026-11-25, continuación)
+
+### Separación entre detección de chord y lectura de caracteres
+
+La rutina de matriz `0x0CF6` recorre ocho filas mediante `OUT (0x40),E` y lee dos bancos de columnas en `0x82` y `0x80`. El patrón esperado en `0x23AC` confirma F1=R2C6 y F2=R6C6: los bytes de columna `0x40` están en los índices 5 y 13 de la tabla de 16 bytes. Esta es la ruta usada para reconocer F1+F2 al arranque.
+
+La primitiva `0x062F`, en cambio, espera el bit 7 del registro interno Z180 `0x05` y lee el registro `0x09`. Es la ruta de recepción serie ASCI1 (STAT1/RDR1), no un segundo escaneo directo de la matriz. En el flujo de arranque `0x243F–0x2456`, la ROM llama cuatro veces a `0x062F` y guarda los bytes en D011/D013.
+
+### PIC y enlace serie
+
+El desensamblado del PIC16C54C muestra:
+
+- `0x027–0x03D`: transmisor bit-bang por RB0, desplaza el dato y ejecuta retardos.
+- `0x0B4–0x0BB`: transmite cuatro bytes consecutivos tomados de RAM PIC `0x08–0x0B`.
+- `0x0AF–0x0B3`: consulta RB7 como condición de disponibilidad/handshake antes de transmitir.
+- `0x0C1–0x0C2`: genera un pulso bajo/alto en RA2, conectado a Z180 `/INT1`.
+- `0x082–0x0A0` y `0x0D7–0x0E2`: la máquina de estados consulta RB2/RB3 y repite o abandona la secuencia.
+
+Esto confirma que RB0→RXA1 es una ruta de datos real del PIC hacia el Z180. Sin embargo, el código PIC examinado no muestra todavía una decodificación completa de caracteres A/C/E/1/3/5: los cuatro bytes enviados podrían ser un paquete de estado/evento, una respuesta al handshake o datos de teclado; no se debe asumir que equivalen directamente a los caracteres.
+
+### Consecuencia para la validación de ACE135
+
+No se ha validado todavía la contraseña. La pantalla de contraseña fue alcanzada mediante la prueba de F1+F2, pero para introducir ACE135 se requiere comprender y reproducir la ruta que alimenta ASCI1/RDR1, además de las señales de teclado que provocan la actividad PIC. El modelo actual solo aproxima RB3 con `any_key_pressed()` y no modela RB4; por ello aún no representa completamente la interfaz eléctrica de teclado/PIC.
+
+### Siguiente experimento controlado
+
+1. Registrar los cuatro bytes que recibe el Z180 durante el arranque, correlacionándolos con los valores transmitidos por PIC RAM `0x08–0x0B`.
+2. Seguir las rutinas PIC `0x000, 0x001, 0x00A, 0x010, 0x011, 0x015, 0x022, 0x025, 0x050, 0x059, 0x062, 0x06B` para reconstruir el origen de esos cuatro bytes y las condiciones RB2/RB3/RB7.
+3. Determinar si las teclas de contraseña entran por la matriz directa Z180, por el PIC/ASCI1 o por una combinación de ambas rutas.
+4. Solo entonces crear una prueba automatizada de ACE135 que use los mismos registros/entradas que el hardware, sin saltar la rutina de lectura de la ROM.

@@ -27,7 +27,7 @@ Powering Down...
 
 The Application BIOS failure has now been traced one level deeper: ROM routine `0x20FF` searches index `0x12` for `SHELL`, but the corresponding table entry `D0DF` is zero. The ROM scan routine `0x2206` maps logical `F000` to physical `0x40000` (`CBR=31`, `CBAR=F0`) and expects a `3C 5A` block header there. The supplied EPROM has `FF 00` at that signature position and no `3C 5A` markers in `0x40000–0x7FFFF`, a 256 KiB window matching the documented total SRAM capacity. The current flat 1 MiB writable ROM shadow does not model separate SRAM or persistence, so the leading explanation is a missing SRAM overlay/image; exact chip-select decoding and real SRAM contents remain to be verified. See [Application BIOS storage scan analysis](docs/APPLICATION_BIOS_STORAGE_SCAN_20261125.md).
 
-A dynamic PIC trace now confirms RA3→CS2 changes state: PORTA `00` drives RA3 low and PORTA `0C` drives it high, synchronized with the PIC's RA2/IRQ1 pulse. RA3 remains high across the interval that includes ROM scan routine `0x2206`, then returns low as the Z180 goes back to SLP. This establishes the firmware timing relationship but does not establish the SRAM chip's active polarity or physical address decode. See [PIC RA3 / SRAM CS2 trace](docs/RA3_SRAM_CS2_TRACE_20261125.md).
+A dynamic PIC trace confirms RA3→CS2 changes state: PORTA `00` drives RA3 low and PORTA `0C` drives it high. Drive photographs identify both SRAMs as Samsung K6X1008C2D-GB55 (128K×8, 32-SOP); the project datasheet assigns CS2 to pin 30, active high, and /CS1 to pin 22, active low. Therefore RA3 high asserts the shared CS2 input during ROM scan `0x2206`. Full chip selection remains unresolved because /CS1 must also be low and its per-chip routing is not yet traced. See [SRAM hardware evidence](docs/SRAM_K6X1008C2D_HARDWARE_EVIDENCE_20261125.md) and [PIC RA3 / SRAM CS2 trace](docs/RA3_SRAM_CS2_TRACE_20261125.md).
 
 Password-key capture remains a separate unresolved path. The 64 KiB RAM capture is only the logical `0000–FFFF` window, not the complete 256 KiB physical SRAM image.
 
@@ -36,17 +36,19 @@ Password-key capture remains a separate unresolved path. The 64 KiB RAM capture 
 See:
 - [Boot interconnect and IRQ1 resolution](docs/BOOT_BLOCKER_RESOLUTION_20261125.md)
 - [Recovery status, RAM initialization evidence and next starting point](docs/RECOVERY_STATUS_AND_NEXT_START_20261125.md)
+- [Samsung K6X1008C2D-GB55 — SRAM hardware evidence and corrected pinout](docs/SRAM_K6X1008C2D_HARDWARE_EVIDENCE_20261125.md)
+- [PIC RA3 / SRAM CS2 dynamic trace](docs/RA3_SRAM_CS2_TRACE_20261125.md)
 
 ## Hardware model
 
 - CPU: Zilog Z8S180, 6.144 MHz.
 - Firmware: M27C801 EPROM, 1 MiB.
-- RAM: two 128 KiB SRAM devices, 256 KiB total (physical chip-select and bank mapping pending).
+- RAM: two Samsung K6X1008C2D-GB55 SRAMs, each 128K×8 (256 KiB total); shared CS2 is U11 RA3 to pin 30 and active high. Per-chip /CS1 routing and bank map remain pending.
 - LCD: 40×4 characters, two KS0066 controllers.
 - Keyboard: 8×16 matrix, 74HC374 row latch, two 74VHC244 column buffers and 74HC138 decoder.
 - PIC: Microchip PIC16C54C U11, 32.768 kHz, real 1 KiB dump.
 
-The current 1 MiB `bankrw` memory shadow is diagnostic, not a faithful EPROM/SRAM overlay. PIC RA1→Z180 `/RESET`, RA3→SRAM CS2, T0CKI←U19 `/Y3`, RB4/RB5/RB6, exact RB3 column mapping, and persistent SRAM remain to be modeled.
+The current 1 MiB `bankrw` memory shadow is diagnostic, not a faithful EPROM/SRAM overlay. PIC RA1→Z180 `/RESET`, the per-chip SRAM `/CS1` decoding, SRAM `/OE`/`/WE` and physical address/data buses, T0CKI←U19 `/Y3`, RB4/RB5/RB6, exact RB3 column mapping, and persistent SRAM remain to be modeled.
 
 ## Build and run
 

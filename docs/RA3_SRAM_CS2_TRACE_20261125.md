@@ -47,7 +47,11 @@ El PC del Z180 mostrado es una muestra simultánea al callback de PORTA, no una 
 
 **Demostrado:** el nivel lógico de RA3 conmuta 0/1; el PIC lo genera en las rutinas identificadas; el nivel alto se mantiene durante el intervalo que incluye el escaneo ROM de `0x2206`. En ese periodo, el firmware explora la ventana física `0x40000-0x7FFFF` buscando bloques con firma `3C 5A`.
 
-**No demostrado:** la polaridad activa eléctrica de la entrada CS2 del componente SRAM; el modelo exacto de U16/U17; qué chip responde a cada dirección; ni el contenido real de SRAM de una unidad física. La conexión RA3→CS2 está documentada por continuidad, pero esa continuidad no determina por sí sola la función lógica activa del pin.
+**Actualización con la documentación de hardware de Drive (2026-11-25):** las fotografías identifican U16/U17 como Samsung K6X1008C2D-GB55 y el PDF `01_Hardware/K6X1008C2D_SAM.pdf` confirma el pinout de 32-SOP: CS2, activa en alto, está en pin 30; /CS1, activa en bajo, está en pin 22. El informe de continuidad `WRITER_RE_06_PIC_mapa_conexiones_U11.docx` confirma U11 RA3 pin 2 → CS2 pin 30 de ambas memorias. Por tanto, RA3=1 durante `0x2206` afirma la entrada CS2 de ambas SRAM.
+
+**Aún no demostrado:** qué nivel presenta /CS1 en cada SRAM durante la exploración; qué chip responde a cada dirección; el mapa exacto de bancos; las continuidades de /OE (pin 24), /WE (pin 29) y buses; ni el contenido real de las SRAM físicas. CS2 alto es necesario, pero no suficiente para seleccionar la memoria: también se requiere /CS1 bajo.
+
+La consolidación del pinout, datos de la hoja y discrepancias con el libro de referencia está en `docs/SRAM_K6X1008C2D_HARDWARE_EVIDENCE_20261125.md`.
 
 La observación tampoco cambia la conclusión del informe Application BIOS: el modelo actual devuelve bytes de la EPROM en la dirección física `0x40000`, donde los bytes `FF 00` no coinciden con la firma `3C 5A` esperada. El emulador aún no separa EPROM y SRAM.
 
@@ -62,8 +66,8 @@ La corrida terminó con `RUN_EXIT=0`, aproximadamente 29 segundos emulados y vel
 
 ## Siguiente prueba
 
-1. Identificar el modelo impreso exacto de U16 y U17 y consultar su tabla de verdad de `CS1/CS2/OE/WE`; no inferir polaridad por el nombre CS2.
-2. Confirmar por continuidad/esquema las líneas de dirección, datos, `/OE`, `/WE` y selección de ambos chips.
+1. **Resuelto:** identificar U16/U17 y polaridad de CS2 a partir de fotografías y datasheet. U16/U17 = Samsung K6X1008C2D-GB55; CS2 pin 30 activa-alta; /CS1 pin 22 activa-baja.
+2. Confirmar por continuidad/esquema las líneas /CS1 individuales, direcciones, datos, `/OE` pin 24 y `/WE` pin 29 de ambos chips.
 3. Repetir una prueba con un punto de observación de lectura física durante `0x2206`, correlacionando el nivel RA3 y los bytes devueltos. La lectura debe ser pasiva y no inyectar datos ni firmas.
 4. Solo con ese mapa confirmado, modelar la separación EPROM/SRAM, la selección dinámica por CS2 y la persistencia del bloque SRAM.
 

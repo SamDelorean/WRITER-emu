@@ -196,4 +196,19 @@ Artefactos de esta ejecución:
 - RAM (ventana lógica de 64 KiB): `snap/live_snapshot_20261125_145659.bin`.
 - LCD: `snap/frame_20261125_145659.ppm` (vista PNG derivada: `snap/frame_20261125_145659.png`).
 
-**Siguiente bloqueo (actualizado):** identificar el modelo de U16/U17 y confirmar la polaridad activa de CS2, su decodificación de direcciones y el contenido real de SRAM. La traza PIC confirma que RA3 conmuta 0/1 y permanece alto durante el intervalo que incluye el escaneo ROM `0x2206`; no determina por sí sola la polaridad activa del pin. Ver `docs/RA3_SRAM_CS2_TRACE_20261125.md`. La búsqueda de Application BIOS ya está trazada hasta la tabla `D0BB` y la ventana física `0x40000–0x7FFFF`; ver `docs/APPLICATION_BIOS_STORAGE_SCAN_20261125.md`. Mantener separada esta investigación del problema de entrada de `ACE135`.
+**Siguiente bloqueo (corregido con evidencia de Drive):** la identificación de U16/U17 y la polaridad de CS2 ya están resueltas: Samsung K6X1008C2D-GB55, CS2 pin 30 activa-alta; U11 RA3 pin 2 llega a CS2 de ambos chips. Lo pendiente es la decodificación individual por `/CS1`, el mapa de direcciones/bancos, `/OE`, `/WE` y el contenido real de SRAM. Ver `docs/SRAM_K6X1008C2D_HARDWARE_EVIDENCE_20261125.md` y `docs/RA3_SRAM_CS2_TRACE_20261125.md`. La búsqueda de Application BIOS ya está trazada hasta la tabla `D0BB` y la ventana física `0x40000–0x7FFFF`; ver `docs/APPLICATION_BIOS_STORAGE_SCAN_20261125.md`. Mantener separada esta investigación del problema de entrada de `ACE135`.
+
+
+## Actualización de hardware SRAM — documentación de Drive (2026-11-25)
+
+Se recuperó la hoja de datos que el usuario subió a `01_Investigacion_y_desarrollo/WRITER_INSTRUCTOR/01_Hardware/K6X1008C2D_SAM.pdf` y se contrastó con las fotografías originales y el documento `WRITER_RE_06_PIC_mapa_conexiones_U11.docx`.
+
+- U16 y U17 son **Samsung K6X1008C2D-GB55**, 128K×8 cada una, encapsulado 32-SOP, 55 ns; capacidad conjunta 256 KiB.
+- Pinout corregido: `/CS1` pin 22 (activo bajo), `A10` pin 23, `/OE` pin 24, `A11` pin 25, `/WE` pin 29, `CS2` pin 30 (activo alto), `A15` pin 31, `VCC` pin 32.
+- Continuidad física ya medida: U11 RA3 pin 2 llega a CS2 pin 30 de ambas SRAM. La traza dinámica de RA3 demuestra que CS2 está afirmado en alto durante el intervalo de exploración ROM `0x2206`.
+- **No volver a pedir identificar los integrados ni repetir la continuidad RA3→CS2.** Esa información está en Drive y documentada.
+- Sigue pendiente: trazar `/CS1` individual de U16/U17 (se espera una función de selección de bancos, posiblemente U21 74HC139, aún no medida), `/OE`, `/WE`, bus de direcciones, bus de datos y mapa físico/bancos. Tampoco se dispone todavía de un volcado real de los 256 KiB físicos.
+
+El libro `WRITER_hardware_referencia.xlsx` se actualizó: se renombró la hoja a `U_SRAM_K6X1008C2D`, se corrigió la asignación de pines y se separó lo que está medido de lo que continúa como hipótesis. Ver `docs/SRAM_K6X1008C2D_HARDWARE_EVIDENCE_20261125.md`.
+
+**Nuevo punto de partida:** no comenzar otro levantamiento completo. Recuperar o completar solamente la selección individual `/CS1` y las conexiones `/OE`, `/WE`, A0–A16 e I/O1–I/O8; después correlacionar la respuesta de cada chip durante `0x2206` y construir el mapa SRAM/EPROM separado. La hipótesis de bytes EPROM visibles en la ventana esperada de SRAM sigue vigente, pero el modelo requiere confirmar /CS1 y bancos antes de implementarse.

@@ -1,7 +1,9 @@
 # The Writer — PIC16C54C U11: firmware e interconexión
 
-**Estado:** análisis estático inicial documentado; trazado eléctrico físico pendiente.
-**Fecha:** 2026-11-21
+**Estado:** análisis estático y continuidad física documentados; integración MAME parcial.
+**Fecha inicial:** 2026-11-21. **Actualización:** 2026-11-25.
+
+> Las secciones 5–8 conservan el estado histórico del análisis inicial. La sección 10 incorpora las mediciones físicas posteriores y corrige las conclusiones pendientes; debe prevalecer para el estado actual.
 **Fuente primaria:** `willem/ghidra_writer/analysis_20261121/out/pic_disassembly.txt` (listado Ghidra de las 512 palabras).
 **Volcado:** `roms/akwriter/writer_instructor_pic16c54c_u11.bin` (1 KiB; 512 palabras de 12 bits en contenedores little-endian de 16 bits).
 
@@ -155,3 +157,94 @@ La rutina `0x015–0x021` actualiza el acumulador/divisor de fase y el contador 
 ### Límite de la reconstrucción
 
 Con el firmware se conoce qué pines se configuran como entradas/salidas, qué niveles se escriben en sus latches y en qué fases se leen. No se puede deducir el componente receptor, la presencia de resistencias pull-up/pull-down, buffers o inversión lógica sin esquema, fotografía legible de ambas caras o mediciones de continuidad. La asignación física de RB1/RB2/RB3/RB4/RB5/RB6/RB7 y de RA2/RA3/T0CKI queda pendiente de trazado en la placa.
+
+
+## 10. Continuidad física y corrección de la ruta de arranque (2026-11-25)
+
+La documentación de continuidad `WRITER_RE_06_PIC_mapa_conexiones_U11` confirmó el siguiente pinout funcional. Estas conexiones son evidencia física; los niveles marcados como pendientes no deben confundirse con niveles lógicos medidos.
+
+| PIC16C54C | Conexión física confirmada | Función / estado de emulación |
+|---:|---|---|
+| RA0, pin 17 | Control de energía; destino exacto pendiente | No modelado |
+| RA1, pin 18 | Z180 `/RESET` | No modelado; requiere combinar latch PORTA y TRISA |
+| RA2, pin 1 | Z180 `/INT1` | Implementado; activo bajo |
+| RA3, pin 2 | `CS2` de SRAM U16/U17 | No modelado; ligado al futuro mapa SRAM |
+| RA4/T0CKI, pin 3 | U19 pin 12, salida `/Y3` del 74HC138 | Continuidad confirmada; decodificación pendiente |
+| RB0, pin 6 | Z180 `RXA1` | Implementado como PIC TX bit-bang → ASCI1 RX |
+| RB1, pin 7 | Z180 `/HALT` | Implementado; contempla HALT y SLP |
+| RB2, pin 8 | J1 pin 3, mediante R28 de 22 kΩ | Alto en reposo provisional; medir nivel real |
+| RB3, pin 9 | U9 pin 11 (`2A1`, 74VHC244) | Agregación “cualquier tecla” provisional; falta columna exacta |
+| RB4, pin 10 | Pad KB1 y diodo D3 hacia U10 Q1 | No modelado |
+| RB5, pin 11 | D14 / trayectoria de supercapacitor | No modelado |
+| RB6, pin 12 | Z180 `EXTAL` | No modelado como señal del PIC |
+| RB7, pin 13 | Z180 `TXA1` | Implementado como entrada del PIC |
+
+RA2 y T0CKI son pines distintos. La continuidad RA2→`/INT1` no convierte el pulso en un reloj de exploración de teclado.
+
+### 10.1 Vector IRQ1: corrección de WRITER_RE_08
+
+La conclusión de `WRITER_RE_08_IRQ1_vector_Ghidra` de que D700 no recibía un vector confirmado era incorrecta: la búsqueda de escrituras literales no detectó una instalación indirecta.
+
+La ROM ejecuta:
+
+```text
+0x214B: LD HL,0
+       LD DE,0x182A
+       CALL 0x040C
+```
+
+La rutina `0x040C` calcula la dirección usando el registro `I`:
+
+```text
+LD A,I
+LD D,A
+LD E,0
+ADD HL,DE
+LD (HL),E
+INC HL
+LD (HL),D
+```
+
+El arranque había establecido `I=0xD7`; por tanto, se escribe `0x182A` en `D700–D701`. Los volcados vivos de RAM confirman los bytes `2A 18`. El ISR en `0x182A` actualiza D015, D017, D00F, D011 y D013, y termina con `EI/RET`.
+
+El Z180 llega a `SLP` en `0x0E27` mientras espera actividad de interrupción. Ese PC por sí solo no demuestra un bloqueo: el PIC debe controlar `/INT1` y el estado `/HALT` correctamente.
+
+### 10.2 Integración MAME y pruebas
+
+El driver enlaza ahora:
+
+- PIC RA2 → `Z180_INPUT_LINE_IRQ1`.
+- PIC RB0 → `m_maincpu->rxa1_w()`.
+- Z180 TXA1 → entrada RB7 del PIC.
+- RB1 del PIC ← estado interno `m_HALT` del Z180. MAME codifica SLP como valor 2, pero su entrada pública `Z180_HALT` está enmascarada a bit 0; el driver consulta el byte de estado registrado para detectar HALT y SLP.
+- RB2 usa alto como nivel de reposo provisional. El alternativo se prueba con `WRITER_PIC_RB2=0`.
+- RB3 se aproxima con la agregación de teclas activas de la matriz; no equivale todavía a la conexión exacta U9/2A1.
+
+Resultados en Vontar, con el PIC real y el D017 sintético deshabilitado:
+
+| Prueba | Resultado |
+|---|---|
+| RB2=0, RB3=0 | RA2 permanece bajo; el Z180 repite IRQ1 y termina en PC `0x1869` (tormenta de interrupciones) |
+| RB2=1, sin tecla | El PIC libera RA2, transmite por RB0, genera pulsos IRQ1 y el Z180 llega a la advertencia de memoria; PC final `0x0E27` |
+| RB2=1, D017 sintético deshabilitado | La advertencia de memoria sigue apareciendo; el temporizador artificial no es necesario para llegar a ese estado |
+
+Último estado observado sin D017 sintético: `PC=0E27`, `D011=0019`, `D013=0000`. El log muestra transiciones RB0, cambios RA2 y escrituras LCD. Esto confirma que la ruta de interrupción y el enlace de transmisión están activos, aunque la validación de cada byte y del baud rate todavía debe completarse.
+
+### 10.3 Interpretación del estado de arranque
+
+El emulador ya no se detiene por la interconexión PIC–Z180. Llega a `MEMORY ERROR WARNING` porque la firma fría de SRAM no coincide con la firma válida esperada. La inyección artificial de firma `ANALYSIS_FORCE_VALID_RAM_SIGNATURE` está deshabilitada. No se ejecutó un master reset ni se borró intencionalmente ningún estado persistente.
+
+El volcado de 64 KiB guardado por `WRITER_MEM_DUMP_FILE` representa la ventana lógica `0000–FFFF` / física `C0000–CFFFF`; no es una imagen completa de los 256 KiB de SRAM.
+
+### 10.4 Pendientes prioritarios
+
+1. Medir el nivel de reposo real de RB2 en J1 pin 3 y confirmar si alto es el estado físico correcto.
+2. Identificar qué columna exacta llega a U9/2A1 (RB3); sustituir la agregación “cualquier tecla” por esa señal.
+3. Modelar RA1→`/RESET` usando conjuntamente PORTA y TRISA; cuando RA1 es entrada, considerar la resistencia de pull-up R19.
+4. Modelar RA3→SRAM CS2 y reconstruir el mapa físico de las dos SRAM de 128 KiB, separándolo de la EPROM de 1 MiB.
+5. Seguir las entradas del 74HC138 U19 y conectar T0CKI a los pulsos reales de `/Y3`.
+6. Determinar el rol de RB4/RB5/RB6 y el control de energía RA0.
+7. Validar baud rate, polaridad y los cuatro bytes RB0→RXA1 con captura temporal o trazado de RDRF/STAT1.
+8. Implementar SRAM persistente y validar el procedimiento de master reset antes de declarar un arranque normal.
+
+Las conclusiones de continuidad física anteriores prevalecen sobre las inferencias del análisis estático inicial. Mantener explícita la distinción entre conexión confirmada, nivel lógico medido y aproximación del emulador.

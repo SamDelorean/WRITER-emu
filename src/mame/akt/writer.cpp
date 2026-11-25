@@ -2,78 +2,42 @@
 // copyright-holders:Sandro Ronco, Bartman/Abyss, SamDelorean
 /***************************************************************************
 
-    AKT Inc. "The Writer" (Writer Instructor), firmware v3.70
+    The Writer — AKT Writer Instructor, firmware v3.70
 
-    Minimal skeleton driver.
+    Experimental MAME driver. MACHINE_NOT_WORKING remains intentional:
+    the CPU now reaches the firmware's memory-warning idle state, but the
+    physical SRAM map, power/reset controls and full keyboard behavior are
+    not yet reproduced.
 
-    Based on existing MAME drivers (BSD-3-Clause):
-      - src/mame/brother/ax145.cpp      : Z180 family CPU + HD44780 word processor structure
-      - src/mame/skeleton/alphasma.cpp  : 40x4 LCD made of two KS0066 (HD44780 compatible)
+    Hardware identified:
+      - Zilog Z8S180, 6.144 MHz
+      - M27C801 EPROM, 1 MiB
+      - 256 KiB SRAM (two devices; chip-select topology still being mapped)
+      - 40x4 character LCD, two KS0066 controllers
+      - PIC16C54C U11, 32.768 kHz, real 1 KiB firmware dump
+      - 8x16 keyboard matrix, two 74VHC244 buffers and 74HC138 decoder
 
-    Hardware (known):
-      - CPU: Zilog Z8S180 10VSG (10 MHz part), crystal Y2 ECS 6.144 MHz
-      - ROM: M27C801 EPROM, 1 MiB (dumped, 3 identical reads)
-      - RAM: 2x Samsung K6X1008 (128 KiB each, 256 KiB total)
-      - Logic: 74HC139, 74HC138, 74HC86, 74HC374 (kbd rows), 2x 74VHC244 (kbd cols)
-      - LCD: 40x4 characters, same module as AlphaSmart Pro / 2000 / 3000 (8-pin LCD1)
-      - J1: RJ-type serial connector; PIC + 32.768 kHz crystal Y1 (role pending)
+    Verified boot-path integration (2026-11-25):
+      - PIC RA2 -> Z180 /INT1; firmware installs IRQ1 vector 0x182A at D700
+      - PIC RB0 -> Z180 ASCI1 RXA1; Z180 TXA1 is sampled on PIC RB7
+      - PIC RB1 samples the Z180 /HALT state, including SLP
+      - PIC RB2 uses an idle-high J1 default (physical idle level unmeasured)
+      - PIC RB3 currently models aggregate keyboard activity; exact U9 2A1
+        matrix-column mapping is still pending
+      - synthetic D017 1 kHz tick is disabled by default; opt-in only via
+        WRITER_ENABLE_D017_TICK=1
 
-    Firmware MMU setup at reset (0x23EC): CBAR=88/CBR=B8 transition, then
-    CBAR=F0, CBR=C0, BBR=C0 -> logical 0000-FFFF = physical C0000-CFFFF.
+    A headless run now reaches the firmware's MEMORY ERROR WARNING and
+    sleeps at PC 0x0E27. This is not a CPU deadlock: the cold SRAM signature
+    is invalid. A real SRAM image or the documented master-reset procedure
+    is needed to reach a normal initialized editor state.
 
-    DIAGNOSTIC BUILD: the whole 1 MiB physical space is a RAM shadow loaded
-    from the ROM, so the firmware can run while we log where it writes
-    (= where the real RAM must be) and which external I/O ports it uses.
+    Remaining fidelity gaps include PIC RA1 -> Z180 /RESET, PIC RA3 -> SRAM
+    CS2, PIC T0CKI <- U19 /Y3, RB4/RB5/RB6, the exact RB3 keyboard column,
+    a physical 256 KiB SRAM map/persistence, and full keycap mapping.
 
-    Keyboard (confirmed, routine 0CF6): direct matrix scanned by the Z180.
-      - OUT (0040h) = one-hot row strobe (80h,40h,...,01h) via 74HC374
-      - IN  (0080h) = sense columns 0-7  (74VHC244 #1), pressed = 1
-      - IN  (0082h) = sense columns 8-15 (74VHC244 #2)
-    Master-reset key combos (held at power-on, checked before the memory test):
-      - 23AC: row2/col6 + row6/col6
-      - 23BC: row2/col6 + row2/col8 + row6/col6
-    Physical keycap names for each (row,col) still to be mapped.
-
-    CONFIRMED by live trace + code at 07C6-088C (CGRAM-define routine):
-      - RAM is physically resident at C0000-CDFFF (heavy MEMWR activity there).
-      - LCD: two independent KS0066 controllers, classic two-register scheme,
-        RS = low address bit (A0), controller select = next bit:
-          00C0/00C1 = controller 0 instruction/data
-          00C2/00C3 = controller 1 instruction/data
-        (not a port-pair broadcast to both, as first assumed).
-
-    TODO (pending firmware analysis, no data invented here):
-      - map matrix (row,col) positions to physical keys
-
-    PIC (U11), confirmed by a physical dump of the real chip (Arduino +
-    Willem programmer, DS30190 verify-mode protocol, 3 identical reads):
-    PIC16C54C-04I/P, CONFIG=0xFFC (CP=1 unprotected, WDTE=1, FOSC=LP ->
-    confirms the 32.768 kHz crystal Y1). 227 real words at 0x000-0x0E2,
-    rest blank; reset vector 0x1FF -> GOTO 0x074.
-
-    Disassembly of the real dump shows the PIC is NOT a passive slave: it
-    runs a free loop keeping its own 40-bit software tick counter (bytes
-    0x08-0x0B + 0x0C), and on a PORTB handshake condition it bit-bangs
-    that 4-byte counter out serially on PORTB,0 (-> Z180 ASCI1 RX). It also
-    drives TMR0 from an external clock, OPTION=0x20 (T0CS=1, T0SE=0,
-    prescaler 1:2 on Timer0). CORRECTED (Ghidra disasm, analysis_20261121,
-    confirmed on the real dump): RA2 (pin 1) and T0CKI (pin 3) are
-    DISTINCT physical PIC pins, not one signal as an earlier comment here
-    assumed. The firmware does pulse RA2 (PORTA bits cleared/set at PIC
-    words 0x0C1-0x0C2, alongside RA3), but nothing in the disassembly ties
-    that pulse to the keyboard strobe - the real matrix-scan routine
-    (ROM 0x0CF6) uses Z180 ports 0x40/0x80/0x82 only, entirely separate
-    from the PIC. Do not re-label RA2 as a "keyboard clock" without
-    following the trace on the board. Full details + address-by-address
-    disassembly: confidential doc WRITER_RE_05_PIC_desensamblado_real;
-    cross-checked against WRITER_RE_08_IRQ1_vector_Ghidra (2026-11-23).
-
-    This build adds the REAL pic16c5x core (MAME's own PIC16C54 device,
-    src/devices/cpu/pic16c5x) running the real dump, wired only to logging
-    callbacks for now (PORTA/PORTB writes). It is NOT yet bit-level wired
-    to the Z180's ASCI1 RX pin - that is the next RE step. The D017 tick
-    stub (see d017_tick below) stays in place as the firmware-side
-    fallback while that real serial link isn't connected.
+    ROM data is not distributed with this source; use a dump from the
+    owner's device. See README.md and docs/BOOT_BLOCKER_RESOLUTION_20261125.md.
 
 ***************************************************************************/
 
@@ -121,8 +85,18 @@ private:
 	required_ioport_array<8> m_kb;
 	std::unique_ptr<uint8_t[]> m_mem;
 	uint8_t m_kb_strobe = 0;
+	int m_pic_ra2_last = -1;
+	int m_pic_rb0_last = -1;
+	int m_pic_portb_last = -1;
+	int m_z180_txa1 = 1;
+	int m_pic_force_wake_reads = 0;
+	bool m_pic_rb2_idle_high = true;
 
 	uint16_t kb_sense();
+	bool any_key_pressed();
+	bool z180_halt_pin_asserted() const;
+	uint8_t pic_portb_r();
+	void z180_txa1_w(int state) { m_z180_txa1 = state; }
 	void kb_strobe_w(uint8_t data) { m_kb_strobe = data; }
 	uint8_t kb_sense_lo_r() { return kb_sense() & 0xff; }
 	uint8_t kb_sense_hi_r() { return kb_sense() >> 8; }
@@ -145,13 +119,9 @@ private:
 	uint64_t m_ui_frame_counter = 0;
 	void ui_frame_dump(screen_device &screen, bitmap_ind16 &bitmap);
 
-	// REAL PIC16C54C (U11). Its free-running loop toggles these ports
-	// continuously (confirmed by the real-dump disassembly, see header
-	// comment) - logging every write floods error.log (12000+ lines in a
-	// few seconds) and chokes emulation speed for no new information, so
-	// these are no-ops for now. Re-enable logerror here only for a PIC-
-	// specific trace, not for general Z180/keyboard/LCD runs.
-	uint8_t pic_porta_r() { return 0x00; } // TODO: real handshake lines, not wired yet
+	// PIC RA4/T0CKI is a separate external input from U19 /Y3. Its decoder
+	// source has not been verified, so leave the RTCC input unclocked for now.
+	uint8_t pic_porta_r() { return 0x00; }
 
 	// PIC pin1 (RA2) = Z180 pin11 (/INT1), per continuity measurement
 	// (WRITER_RE_06_PIC_mapa_conexiones_U11, 2026-11-22, "Confirmado").
@@ -166,38 +136,37 @@ private:
 	//     so the firmware DOES explicitly enable the IRQ1 interrupt
 	//     shortly after reset. /INT1 is a live, intended interrupt line,
 	//     not a leftover/unused pin.
-	// OPEN, STILL NOT RESOLVED (this is the real next step, not a guess
-	// to fill in): per z180.cpp's take_interrupt(), IRQ1 does not use
-	// RST 38h - it reads a 16-bit pointer from RAM at ((I<<8)|IL) and
-	// jumps there. With I=0xd7 and IL defaulting to 0x00 (m_il never
-	// written anywhere in the 64 KiB analyzed ROM window - no OUT0/IN0
-	// on port 0x33 at all), that address is 0xD700. No instruction in
-	// the analyzed window writes a literal 0xd6xx/0xd70x/0xd71x value
-	// anywhere, so no confirmed handler pointer is installed there in
-	// this window. Firing /INT1 may therefore jump through whatever
-	// happens to be in RAM at 0xD700/0xD701 - which would explain erratic
-	// parking rather than reaching a real handler. Two real possibilities,
-	// neither assumed here: (a) the vector IS set up, but by code in a
-	// banked ROM region outside Ghidra's 64 KiB logical window (CBAR/
-	// CBR/BBR banking - not yet checked), or (b) IL is written via some
-	// path not yet found and 0xD700 is the wrong address. Next step:
-	// check the banked regions for a write to port 0x33 or to the
-	// resulting vector address before drawing conclusions from this
-	// wiring alone. Electrical polarity (asserted-low) is still per the
-	// Z180 INT1 convention, not individually measured.
-	// TEMPORARILY DISCONNECTED (2026-11-23, by explicit instruction, after
-	// the full-ROM scan above found no handler installed at the computed
-	// IRQ1 vector 0xD700 anywhere in the 1 MiB image - see
-	// WRITER_RE_08_IRQ1_vector_Ghidra sec. 5). The electrical wiring
-	// (RA2 -> /INT1) stays as documented above and is not in question;
-	// only the line is not driven for now, to isolate whether the hang
-	// comes from somewhere else. Re-enable with the commented-out line
-	// below once a real IRQ1 handler/vector is located.
+	// IRQ1 vector is installed by the firmware itself; the earlier RE08
+	// conclusion that D700 was uninitialized missed this indirect setup:
+	//   0x214B: LD HL,0 / LD DE,0x182A / CALL 0x040C
+	//   0x040C: LD A,I / LD D,A / LD E,0 / ADD HL,DE / LD (HL),E /
+	//          INC HL / LD (HL),D
+	// With I=0xD7 this writes the 16-bit pointer 0x182A at D700-D701.
+	// All four RAM snapshots confirm [D700]=2A 18. The ISR at 0x182A
+	// updates D015/D017/D00F/D011/D013 and returns via EI/RET.
+	// The Z180 reaches SLP at 0x0E27 while waiting for this interrupt.
+	// PIC disassembly shows RA2 pulses low/high at words 0x0C1-0x0C2;
+	// board continuity confirms RA2 -> active-low Z180 /INT1. Therefore
+	// drive IRQ1 from RA2. RB0 -> RXA1 is also wired in pic_portb_w().
 	void pic_porta_w(uint8_t data)
 	{
-		// m_maincpu->set_input_line(Z180_INPUT_LINE_IRQ1, BIT(data, 2) ? CLEAR_LINE : ASSERT_LINE);
+		const int ra2_high = BIT(data, 2);
+		m_maincpu->set_input_line(Z180_INPUT_LINE_IRQ1, ra2_high ? CLEAR_LINE : ASSERT_LINE);
+		if (ra2_high != m_pic_ra2_last) {
+			logerror("PIC RA2=%d -> Z180 /INT1 %s\n", ra2_high, ra2_high ? "CLEAR" : "ASSERT");
+			m_pic_ra2_last = ra2_high;
+		}
 	}
-	void pic_portb_w(uint8_t data) { }
+	void pic_portb_w(uint8_t data)
+	{
+		// PIC RB0 (U11 pin 6) is physically connected to Z180 RXA1 (pin 53).
+		const int rb0 = BIT(data, 0);
+		m_maincpu->rxa1_w(rb0);
+		if (rb0 != m_pic_rb0_last) {
+			logerror("PIC RB0/TX=%d -> Z180 RXA1\n", rb0);
+			m_pic_rb0_last = rb0;
+		}
+	}
 
 	void map_program(address_map &map) ATTR_COLD;
 	void map_io(address_map &map) ATTR_COLD;
@@ -248,6 +217,45 @@ uint16_t writer_state::kb_sense()
 	return v;
 }
 
+bool writer_state::any_key_pressed()
+{
+	// The PIC sees one keyboard-buffer input at U9 pin 11 (2A1). Until the
+	// exact column index is confirmed, aggregate the active-high matrix as
+	// a wake request. The Z180 still performs the real 8x16 scan afterward.
+	for (int row = 0; row < 8; row++)
+		if (m_kb[row]->read() != 0)
+			return true;
+	return false;
+}
+
+bool writer_state::z180_halt_pin_asserted() const
+{
+	// MAME stores 1=HALT and 2=SLP in m_HALT, but its public Z180_HALT
+	// state entry is masked to bit 0. Read the registered raw state byte so
+	// the PIC's RB1 sees /HALT asserted for BOTH HALT and SLP.
+	const device_state_entry *entry = m_maincpu->state_find_entry(Z180_HALT);
+	return entry && (*static_cast<const uint8_t *>(entry->dataptr()) != 0);
+}
+
+uint8_t writer_state::pic_portb_r()
+{
+	uint8_t data = 0;
+	// RB1 <- Z180 /HALT (active low); RB2 <- J1 serial input (idle-high
+	// default, override with WRITER_PIC_RB2=0); RB3 <- keyboard wake;
+	// RB7 <- Z180 TXA1. RB2's physical idle level is not yet measured.
+	if (!z180_halt_pin_asserted()) data |= 0x02;
+	if (m_pic_rb2_idle_high) data |= 0x04;
+	const bool force_wake = (m_pic_force_wake_reads > 0);
+	if (force_wake) --m_pic_force_wake_reads;
+	if (force_wake || any_key_pressed()) data |= 0x08;
+	if (m_z180_txa1) data |= 0x80;
+	if (data != m_pic_portb_last) {
+		logerror("PIC PORTB inputs=%02X (RB1=/HALT,RB2=J1,RB3=KEY,RB7=TXA1)\n", data);
+		m_pic_portb_last = data;
+	}
+	return data;
+}
+
 uint8_t writer_state::ext_io_r(offs_t offset)
 {
 	const offs_t port = offset + 0x40;
@@ -288,19 +296,11 @@ void writer_state::lcd_w(offs_t offset, uint8_t data)
 }
 
 // STUB, NOT a reconstruction of the real PIC protocol: the Z180 core in this
-// MAME tree has no ASCI1 receive simulation at all (no code anywhere sets
-// RDR1/STAT1's RDRF bit), and nothing increments the RAM variable at D017
-// that routine 062F (read-ASCI1-byte-with-timeout) uses as its elapsed-time
-// counter to give up and return 0 when no byte arrives. Confirmed by a final
-// state dump: PC parks forever inside 062F's wait loop with D017 and D073
-// (the generic interrupt-flag byte) stuck at their boot-time values. Without
-// *some* source of elapsed time, every call to 062F after the first few
-// (which apparently resolve before this timer starts mattering) hangs
-// forever, and the firmware never reaches any text-printing code.
-// This timer only advances that one RAM counter, at an arbitrary rate, so
-// the firmware's own documented "nothing answered -> proceed with zeros"
-// behavior (D011/D013 already 0000 at boot) can run its course. It does not
-// supply any PIC byte value, timing, or protocol semantics.
+// D017 is the firmware's 16-bit tick counter, normally advanced by the
+// real PIC-driven IRQ1 handler at 0x182A. This synthetic 1 kHz timer is a
+// diagnostic fallback from the earlier disconnected-PIC stage; it is not
+// enabled by default and is available only with WRITER_ENABLE_D017_TICK=1.
+// It supplies no PIC bytes or protocol semantics.
 TIMER_DEVICE_CALLBACK_MEMBER(writer_state::d017_tick)
 {
 	uint16_t v = m_mem[0xcd017] | (m_mem[0xcd018] << 8);
@@ -422,6 +422,14 @@ void writer_state::machine_start()
 	m_tmp_bitmap = std::make_unique<bitmap_ind16>(6 * 40, 9 * 4);
 	m_mem = std::make_unique<uint8_t[]>(0x100000);
 	m_mainbank->set_base(&m_mem[0]);
+	m_maincpu->rxa1_w(1); // UART idle state
+	if (char const *force = std::getenv("WRITER_TEST_PIC_WAKE")) {
+		if (force[0] == '1') m_pic_force_wake_reads = 64;
+	}
+	if (char const *rb2 = std::getenv("WRITER_PIC_RB2"))
+		m_pic_rb2_idle_high = (rb2[0] != '0');
+	if (m_pic_force_wake_reads)
+		logerror("TEST: one-shot PIC RB3 keyboard-wake pulse (%d PORTB reads)\n", m_pic_force_wake_reads);
 	machine().add_notifier(MACHINE_NOTIFY_EXIT, machine_notify_delegate(&writer_state::report_writes, this));
 
 	if (char const *path = std::getenv("WRITER_UI_FRAME_FILE"))
@@ -432,13 +440,9 @@ void writer_state::machine_reset()
 {
 	std::copy_n(&m_rom[0], 0x100000, &m_mem[0]);
 
-	// ANALYSIS-ONLY instrumentation: force a valid boot RAM signature
-	// (D000=916Ah, D002=5A3Ch, logical Dxxx -> physical 0xC0000+Dxxx) so the
-	// firmware skips "MEMORY ERROR WARNING" and reaches normal operation.
-	// This is ONLY for keyboard-matrix mapping (watching which (row,col)
-	// echoes which character on the live LCD). It must stay OFF (set this
-	// to false and rebuild) for any run meant to document real physical
-	// recovery, where reaching this screen genuinely is the starting state.
+	// Optional analysis-only signature injection for keyboard-matrix work.
+	// It is deliberately disabled: normal runs must exercise the real cold-
+	// RAM validation path and display the firmware's MEMORY ERROR WARNING.
 	constexpr bool ANALYSIS_FORCE_VALID_RAM_SIGNATURE = false;
 	if (ANALYSIS_FORCE_VALID_RAM_SIGNATURE)
 	{
@@ -609,10 +613,11 @@ void writer_state::writer(machine_config &config)
 	Z8S180(config, m_maincpu, 6'144'000); // crystal Y2 ECS 6.144 MHz; CCR/CMR set by firmware
 	m_maincpu->set_addrmap(AS_PROGRAM, &writer_state::map_program);
 	m_maincpu->set_addrmap(AS_IO, &writer_state::map_io);
+	m_maincpu->txa1_wr_callback().set(FUNC(writer_state::z180_txa1_w));
 
-	// STUB tick for D017 (see d017_tick comment above) - arbitrary rate,
-	// just fast enough that 062F's timeout resolves promptly in our runs.
-	TIMER(config, "d017_tick").configure_periodic(FUNC(writer_state::d017_tick), attotime::from_hz(1000));
+	// Real IRQ1 now advances D017. Keep the old synthetic tick opt-in only.
+	if (std::getenv("WRITER_ENABLE_D017_TICK"))
+		TIMER(config, "d017_tick").configure_periodic(FUNC(writer_state::d017_tick), attotime::from_hz(1000));
 
 	for (auto &lcdc : m_lcdc)
 	{
@@ -630,13 +635,13 @@ void writer_state::writer(machine_config &config)
 
 	PALETTE(config, "palette", FUNC(writer_state::palette_init), 2);
 
-	// REAL PIC16C54C (U11), crystal Y1 32.768 kHz (confirmed: CONFIG FOSC=LP
-	// in the real dump). RE-only wiring for now - see header comment and
-	// pic_porta_r/pic_porta_w/pic_portb_w above: not yet bit-level linked to
-	// the Z180's ASCI1 RX line.
+	// REAL PIC16C54C (U11), crystal Y1 32.768 kHz (CONFIG FOSC=LP).
+	// RA2 -> /INT1, RB0 -> RXA1, RB1 <- /HALT, RB7 <- TXA1 and RB2/RB3
+	// inputs are wired in the callbacks above; T0CKI /Y3 remains pending.
 	PIC16C54(config, m_piccpu, 32'768);
 	m_piccpu->set_config(0xffc); // real CONFIG word from the physical dump: CP=1, WDTE=1, FOSC=LP
 	m_piccpu->read_a().set(FUNC(writer_state::pic_porta_r));
+	m_piccpu->read_b().set(FUNC(writer_state::pic_portb_r));
 	m_piccpu->write_a().set(FUNC(writer_state::pic_porta_w));
 	m_piccpu->write_b().set(FUNC(writer_state::pic_portb_w));
 }

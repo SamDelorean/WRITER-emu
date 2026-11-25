@@ -131,3 +131,15 @@ Priority order:
 8. Implement persistent SRAM, then validate master reset and a normal editor boot.
 
 The code and documentation are committed locally on `fix/irq1-ra2-wakeup`, based on `fb69945`; the branch has not been pushed. Generated `cfg/`, `snap/`, `error.log` and the existing `tools/dis_driver.py` were preserved and are not part of the source commit.
+
+## Additional 30-second no-D017 run
+
+The revised `build_writerdiag.sh` completed an end-to-end build, ROM validation and 30-second emulated run. The run exited with code 0; D017 synthetic timing remained disabled.
+
+- PIC RB0 transitions: 28.
+- PIC RA2 edges: 28.
+- LCD writes: 148.
+- Final sample: `PC=16A4`, `D011=0050`, `D013=0000`.
+- D700 still contains `2A 18`.
+
+PC `0x16A4` is a helper routine ending at `0x16C0`; the final PC is simply where the 30-second stop occurred, not evidence of a loop. The RAM snapshot and trace are preserved as `ram_c0000_cffff_boot_warning_30s_no_d017.bin` and `mame_boot_warning_30s_no_d017.log` under `analysis_20261125/out/`.

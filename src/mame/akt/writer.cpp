@@ -935,7 +935,18 @@ INPUT_PORTS_END
 
 void writer_state::writer(machine_config &config)
 {
-	Z8S180(config, m_maincpu, 6'144'000); // crystal Y2 ECS 6.144 MHz; CCR/CMR set by firmware
+	// Crystal Y2 is 6.144 MHz, but the Z8S180 datasheet (Z80180/Z8S180/Z8L180
+	// Technical Manual, STANDBY-mode section) states that a Reset sequence
+	// always selects divide-by-two mode (CCR bit 7 = 0, PHI = XTAL/2) and
+	// that software must explicitly set CCR7=1 for divide-by-one (full
+	// speed). An exhaustive grep of the disassembled firmware
+	// (main_disassembly.txt) found exactly ONE write to CCR (port 0x1f),
+	// right after reset: "IN0 A,(0x1f); OR 0x17; OUT0 (0x1f),A" — 0x17 never
+	// sets bit 0x80, so CCR7 is left at its reset default (0) for the life
+	// of the firmware. PHI therefore runs at 6.144/2 = 3.072 MHz on real
+	// hardware, confirmed from the datasheet plus this firmware trace, not
+	// assumed.
+	Z8S180(config, m_maincpu, 3'072'000); // real PHI = crystal Y2 / 2 (CCR7 reset default 0, never changed by firmware)
 	m_maincpu->set_addrmap(AS_PROGRAM, &writer_state::map_program);
 	m_maincpu->set_addrmap(AS_IO, &writer_state::map_io);
 	m_maincpu->txa1_wr_callback().set(FUNC(writer_state::z180_txa1_w));

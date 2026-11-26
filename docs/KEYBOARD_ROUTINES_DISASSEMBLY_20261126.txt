@@ -1,0 +1,279 @@
+
+### 0B64-0BC3
+ram:0b64: E5                 PUSH HL
+ram:0b65: C5                 PUSH BC
+ram:0b66: 01 40 00           LD BC,0x40
+ram:0b69: 2E 20              LD L,0x20
+ram:0b6b: ED 69              OUT (C),L
+ram:0b6d: 01 82 00           LD BC,0x82
+ram:0b70: ED 68              IN L,(C)
+ram:0b72: CB 4D              BIT 0x1,L
+ram:0b74: 28 02              JR Z,0x0b78
+ram:0b76: F6 01              OR 0x1
+ram:0b78: 01 40 00           LD BC,0x40
+ram:0b7b: 2E 04              LD L,0x4
+ram:0b7d: ED 69              OUT (C),L
+ram:0b7f: 01 82 00           LD BC,0x82
+ram:0b82: ED 68              IN L,(C)
+ram:0b84: CB 4D              BIT 0x1,L
+ram:0b86: 28 02              JR Z,0x0b8a
+ram:0b88: F6 02              OR 0x2
+ram:0b8a: 01 40 00           LD BC,0x40
+ram:0b8d: 2E 02              LD L,0x2
+ram:0b8f: ED 69              OUT (C),L
+ram:0b91: 01 80 00           LD BC,0x80
+ram:0b94: ED 68              IN L,(C)
+ram:0b96: CB 4D              BIT 0x1,L
+ram:0b98: 28 02              JR Z,0x0b9c
+ram:0b9a: F6 04              OR 0x4
+ram:0b9c: 01 40 00           LD BC,0x40
+ram:0b9f: 2E 10              LD L,0x10
+ram:0ba1: ED 69              OUT (C),L
+ram:0ba3: 01 80 00           LD BC,0x80
+ram:0ba6: ED 68              IN L,(C)
+ram:0ba8: CB 7D              BIT 0x7,L
+ram:0baa: 28 02              JR Z,0x0bae
+ram:0bac: F6 08              OR 0x8
+ram:0bae: 01 40 00           LD BC,0x40
+ram:0bb1: 2E 08              LD L,0x8
+ram:0bb3: ED 69              OUT (C),L
+ram:0bb5: 01 82 00           LD BC,0x82
+ram:0bb8: ED 68              IN L,(C)
+ram:0bba: CB 7D              BIT 0x7,L
+ram:0bbc: 28 02              JR Z,0x0bc0
+ram:0bbe: F6 10              OR 0x10
+ram:0bc0: C1                 POP BC
+ram:0bc1: E1                 POP HL
+ram:0bc2: C9                 RET
+
+### 0BD3-0C22
+ram:0bd3: 46                 LD B,(HL)
+ram:0bd4: 23                 INC HL
+ram:0bd5: 3A 86 D0           LD A,(0xd086)
+ram:0bd8: B0                 OR B
+ram:0bd9: A1                 AND C
+ram:0bda: 06 08              LD B,0x8
+ram:0bdc: 17                 RLA
+ram:0bdd: D8                 RET C
+ram:0bde: 14                 INC D
+ram:0bdf: 10 FB              DJNZ 0x0bdc
+ram:0be1: C9                 RET
+ram:0be2: C5                 PUSH BC
+ram:0be3: 01 40 00           LD BC,0x40
+ram:0be6: 3E FF              LD A,0xff
+ram:0be8: ED 79              OUT (C),A
+ram:0bea: 01 80 00           LD BC,0x80
+ram:0bed: ED 78              IN A,(C)
+ram:0bef: 01 82 00           LD BC,0x82
+ram:0bf2: ED 48              IN C,(C)
+ram:0bf4: B1                 OR C
+ram:0bf5: 28 29              JR Z,0x0c20
+ram:0bf7: E5                 PUSH HL
+ram:0bf8: D5                 PUSH DE
+ram:0bf9: 21 C3 0B           LD HL,0xbc3
+ram:0bfc: 1E 80              LD E,0x80
+ram:0bfe: 16 80              LD D,0x80
+ram:0c00: 01 40 00           LD BC,0x40
+ram:0c03: ED 59              OUT (C),E
+ram:0c05: 01 82 00           LD BC,0x82
+ram:0c08: ED 48              IN C,(C)
+ram:0c0a: CD D3 0B           CALL 0x0bd3
+ram:0c0d: 38 0E              JR C,0x0c1d
+ram:0c0f: 01 80 00           LD BC,0x80
+ram:0c12: ED 48              IN C,(C)
+ram:0c14: CD D3 0B           CALL 0x0bd3
+ram:0c17: 38 04              JR C,0x0c1d
+ram:0c19: CB 0B              RRC E
+ram:0c1b: 30 E3              JR NC,0x0c00
+ram:0c1d: 7A                 LD A,D
+ram:0c1e: D1                 POP DE
+ram:0c1f: E1                 POP HL
+ram:0c20: C1                 POP BC
+ram:0c21: C9                 RET
+
+### 0C22-0C40
+ram:0c22: D5                 PUSH DE
+ram:0c23: C5                 PUSH BC
+ram:0c24: EB                 EX DE,HL
+ram:0c25: 21 F0 FF           LD HL,0xfff0
+ram:0c28: ED 4B AD D0        LD BC,(0xd0ad)
+ram:0c2c: 09                 ADD HL,BC
+ram:0c2d: 38 0D              JR C,0x0c3c
+ram:0c2f: 21 8D D0           LD HL,0xd08d
+ram:0c32: 09                 ADD HL,BC
+ram:0c33: 09                 ADD HL,BC
+ram:0c34: 73                 LD (HL),E
+ram:0c35: 23                 INC HL
+ram:0c36: 72                 LD (HL),D
+ram:0c37: 03                 INC BC
+ram:0c38: ED 43 AD D0        LD (0xd0ad),BC
+ram:0c3c: EB                 EX DE,HL
+ram:0c3d: C1                 POP BC
+ram:0c3e: D1                 POP DE
+ram:0c3f: C9                 RET
+
+### 0C40-0CBE
+ram:0c40: E5                 PUSH HL
+ram:0c41: D5                 PUSH DE
+ram:0c42: C5                 PUSH BC
+ram:0c43: 3A 8A D0           LD A,(0xd08a)
+ram:0c46: B7                 OR A
+ram:0c47: 20 40              JR NZ,0x0c89
+ram:0c49: 3A 89 D0           LD A,(0xd089)
+ram:0c4c: B7                 OR A
+ram:0c4d: 20 08              JR NZ,0x0c57
+ram:0c4f: CD E2 0B           CALL 0x0be2
+ram:0c52: B7                 OR A
+ram:0c53: 20 57              JR NZ,0x0cac
+ram:0c55: 18 63              JR 0x0cba
+ram:0c57: CD E2 0B           CALL 0x0be2
+ram:0c5a: 21 89 D0           LD HL,0xd089
+ram:0c5d: BE                 CP (HL)
+ram:0c5e: 20 4C              JR NZ,0x0cac
+ram:0c60: 3A 8C D0           LD A,(0xd08c)
+ram:0c63: 3D                 DEC A
+ram:0c64: 32 8C D0           LD (0xd08c),A
+ram:0c67: 20 51              JR NZ,0x0cba
+ram:0c69: 2A 89 D0           LD HL,(0xd089)
+ram:0c6c: CD 64 0B           CALL 0x0b64
+ram:0c6f: 67                 LD H,A
+ram:0c70: 22 8A D0           LD (0xd08a),HL
+ram:0c73: CD 22 0C           CALL 0x0c22
+ram:0c76: 3E AB              LD A,0xab
+ram:0c78: AD                 XOR L
+ram:0c79: 28 08              JR Z,0x0c83
+ram:0c7b: 3E D9              LD A,0xd9
+ram:0c7d: AD                 XOR L
+ram:0c7e: 28 03              JR Z,0x0c83
+ram:0c80: 3A B1 D0           LD A,(0xd0b1)
+ram:0c83: 32 8C D0           LD (0xd08c),A
+ram:0c86: C3 BA 0C           JP 0x0cba
+ram:0c89: CD E2 0B           CALL 0x0be2
+ram:0c8c: 21 8A D0           LD HL,0xd08a
+ram:0c8f: BE                 CP (HL)
+ram:0c90: 20 1A              JR NZ,0x0cac
+ram:0c92: 3A 8C D0           LD A,(0xd08c)
+ram:0c95: B7                 OR A
+ram:0c96: 28 22              JR Z,0x0cba
+ram:0c98: 3D                 DEC A
+ram:0c99: 32 8C D0           LD (0xd08c),A
+ram:0c9c: 20 1C              JR NZ,0x0cba
+ram:0c9e: 2A 8A D0           LD HL,(0xd08a)
+ram:0ca1: CD 22 0C           CALL 0x0c22
+ram:0ca4: 3A B2 D0           LD A,(0xd0b2)
+ram:0ca7: 32 8C D0           LD (0xd08c),A
+ram:0caa: 18 0E              JR 0x0cba
+ram:0cac: 32 89 D0           LD (0xd089),A
+ram:0caf: 3E 01              LD A,0x1
+ram:0cb1: 32 8C D0           LD (0xd08c),A
+ram:0cb4: 21 00 00           LD HL,0x0
+ram:0cb7: 22 8A D0           LD (0xd08a),HL
+ram:0cba: C1                 POP BC
+ram:0cbb: D1                 POP DE
+ram:0cbc: E1                 POP HL
+ram:0cbd: C9                 RET
+
+### 0D55-0E08
+ram:0d55: D5                 PUSH DE
+ram:0d56: C5                 PUSH BC
+ram:0d57: 2A AF D0           LD HL,(0xd0af)
+ram:0d5a: 7C                 LD A,H
+ram:0d5b: B5                 OR L
+ram:0d5c: 28 0A              JR Z,0x0d68
+ram:0d5e: 11 00 00           LD DE,0x0
+ram:0d61: ED 53 AF D0        LD (0xd0af),DE
+ram:0d65: C3 05 0E           JP 0x0e05
+ram:0d68: CD BE 0C           CALL 0x0cbe
+ram:0d6b: B7                 OR A
+ram:0d6c: CA 05 0E           JP Z,0x0e05
+ram:0d6f: ED 5B 88 D0        LD DE,(0xd088)
+ram:0d73: 3A 87 D0           LD A,(0xd087)
+ram:0d76: A3                 AND E
+ram:0d77: B4                 OR H
+ram:0d78: 32 88 D0           LD (0xd088),A
+ram:0d7b: 26 00              LD H,0x0
+ram:0d7d: CB BD              RES 0x7,L
+ram:0d7f: 29                 ADD HL,HL
+ram:0d80: 29                 ADD HL,HL
+ram:0d81: 11 64 09           LD DE,0x964
+ram:0d84: 19                 ADD HL,DE
+ram:0d85: 5E                 LD E,(HL)
+ram:0d86: 23                 INC HL
+ram:0d87: 56                 LD D,(HL)
+ram:0d88: 23                 INC HL
+ram:0d89: B7                 OR A
+ram:0d8a: EB                 EX DE,HL
+ram:0d8b: E9                 JP (HL)
+ram:0d8c: 21 88 D0           LD HL,0xd088
+ram:0d8f: 1A                 LD A,(DE)
+ram:0d90: AE                 XOR (HL)
+ram:0d91: 77                 LD (HL),A
+ram:0d92: 18 D4              JR 0x0d68
+ram:0d94: EB                 EX DE,HL
+ram:0d95: 6E                 LD L,(HL)
+ram:0d96: 26 00              LD H,0x0
+ram:0d98: 18 63              JR 0x0dfd
+ram:0d9a: EB                 EX DE,HL
+ram:0d9b: 6E                 LD L,(HL)
+ram:0d9c: 3A 88 D0           LD A,(0xd088)
+ram:0d9f: E6 1F              AND 0x1f
+ram:0da1: 67                 LD H,A
+ram:0da2: 18 59              JR 0x0dfd
+ram:0da4: 1A                 LD A,(DE)
+ram:0da5: 6F                 LD L,A
+ram:0da6: 3A 88 D0           LD A,(0xd088)
+ram:0da9: E6 1F              AND 0x1f
+ram:0dab: 67                 LD H,A
+ram:0dac: E6 1C              AND 0x1c
+ram:0dae: 20 4D              JR NZ,0x0dfd
+ram:0db0: 3E 03              LD A,0x3
+ram:0db2: A4                 AND H
+ram:0db3: 28 48              JR Z,0x0dfd
+ram:0db5: EB                 EX DE,HL
+ram:0db6: 23                 INC HL
+ram:0db7: 6E                 LD L,(HL)
+ram:0db8: 26 00              LD H,0x0
+ram:0dba: 18 0F              JR 0x0dcb
+ram:0dbc: 1A                 LD A,(DE)
+ram:0dbd: 6F                 LD L,A
+ram:0dbe: 3A 88 D0           LD A,(0xd088)
+ram:0dc1: 67                 LD H,A
+ram:0dc2: B7                 OR A
+ram:0dc3: 28 38              JR Z,0x0dfd
+ram:0dc5: EB                 EX DE,HL
+ram:0dc6: 23                 INC HL
+ram:0dc7: 6E                 LD L,(HL)
+ram:0dc8: E6 1C              AND 0x1c
+ram:0dca: 67                 LD H,A
+ram:0dcb: 3A 85 D0           LD A,(0xd085)
+ram:0dce: B7                 OR A
+ram:0dcf: 28 2C              JR Z,0x0dfd
+ram:0dd1: 3A 88 D0           LD A,(0xd088)
+ram:0dd4: E6 03              AND 0x3
+ram:0dd6: 28 25              JR Z,0x0dfd
+ram:0dd8: FE 03              CP 0x3
+ram:0dda: 28 21              JR Z,0x0dfd
+ram:0ddc: 0F                 RRCA
+ram:0ddd: 30 10              JR NC,0x0def
+ram:0ddf: E5                 PUSH HL
+ram:0de0: 7D                 LD A,L
+ram:0de1: 21 3F 0D           LD HL,0xd3f
+ram:0de4: 01 16 00           LD BC,0x16
+ram:0de7: ED B1              CPIR
+ram:0de9: E1                 POP HL
+ram:0dea: C2 68 0D           JP NZ,0x0d68
+ram:0ded: 18 0E              JR 0x0dfd
+ram:0def: E5                 PUSH HL
+ram:0df0: 7D                 LD A,L
+ram:0df1: 21 24 0D           LD HL,0xd24
+ram:0df4: 01 1B 00           LD BC,0x1b
+ram:0df7: ED B1              CPIR
+ram:0df9: E1                 POP HL
+ram:0dfa: C2 68 0D           JP NZ,0x0d68
+ram:0dfd: E5                 PUSH HL
+ram:0dfe: 2A 11 D0           LD HL,(0xd011)
+ram:0e01: 22 B5 D0           LD (0xd0b5),HL
+ram:0e04: E1                 POP HL
+ram:0e05: C1                 POP BC
+ram:0e06: D1                 POP DE
+ram:0e07: C9                 RET

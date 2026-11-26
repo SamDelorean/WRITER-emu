@@ -217,6 +217,16 @@ void writer_state::map_program(address_map &map)
 	map(0x00000, 0xfffff).bankrw(m_mainbank);
 }
 
+// Real U19 (74HC138) port decoder, closed by multimeter continuity plus the
+// Zilog Z8S180 PLCC-68 datasheet pinout (cross-checked against two
+// independent sources): select A/B/C = Z180 A1/A6/A7 (pins 15/21/22);
+// /G2A tied to GND (always enabled); /G2B = Z180 /IORQ (pin 62); G1 = Z180
+// E clock (pin 64, qualifies the decode to the valid bus-cycle window).
+// Y2=0x40 (CP of the keyboard row latch U10), Y4=0x80 (/OE of column buffer
+// U8), Y5=0x82 (/OE of column buffer U9), Y6=0xC0 and Y7=0xC2 (LCD
+// controllers via U20). This matches the port map below exactly, so no
+// behavioral change is needed here: the address-based handlers already
+// model the real decode. See docs/U19_74138_PIN_MAP_20261125.md.
 void writer_state::map_io(address_map &map)
 {
 	map.global_mask(0xffff);

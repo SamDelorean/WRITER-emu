@@ -76,7 +76,7 @@ The matrix scan/FIFO production and the character dispatch table are now indepen
 
 ## Important unresolved cross-check
 
-The earlier Master Reset chord-pattern analysis assigned the chord positions to R2C6 and R6C6. In this translation table, the corresponding indices currently decode as `z/Z` and special code `0x1B` (ESC), respectively. This may reflect a coordinate-convention mismatch or an incorrect semantic label on the reset-pattern bytes. **Do not hard-code F1/F2 names from this correlation yet.** Reconcile the raw 16-byte pattern, port-bank/bit order and table index using a controlled one-key trace before assigning physical legends.
+**Resolved by the Ghidra phase-1 analysis (2026-11-26):** routine `0x0CF6` compares full 16-byte matrix snapshots, and the raw patterns at `0x23AC`, `0x23BC`, and `0x23DC` map to table entries `0x29` (z/Z), `0x69` (special code `0x1B`, ESC), and `0x27` (special handler `0x0D94`, data `0xA7`). The physical legend/meaning of entry `0x27` remains unresolved. Earlier F1/F2-style naming was unsupported and is withdrawn. See `KEYBOARD_PHASE1_GHIDRA_20261126.md` for the raw pattern bytes and branch analysis.
 
 ## Next steps
 

@@ -1,0 +1,445 @@
+
+### 0D20-0EBD
+ram:0d20: 22 AF D0 LD (0xd0af),HL
+ram:0d23: C9 RET
+0D24: 20 [not disassembled/data/unknown]
+0D25: 5E [not disassembled/data/unknown]
+0D26: 26 [not disassembled/data/unknown]
+0D27: 2A [not disassembled/data/unknown]
+0D28: 28 [not disassembled/data/unknown]
+0D29: 29 [not disassembled/data/unknown]
+0D2A: 5F [not disassembled/data/unknown]
+0D2B: 2B [not disassembled/data/unknown]
+0D2C: 59 [not disassembled/data/unknown]
+0D2D: 55 [not disassembled/data/unknown]
+0D2E: 49 [not disassembled/data/unknown]
+0D2F: 4F [not disassembled/data/unknown]
+0D30: 50 [not disassembled/data/unknown]
+0D31: 7B [not disassembled/data/unknown]
+0D32: 7D [not disassembled/data/unknown]
+0D33: 7C [not disassembled/data/unknown]
+0D34: 48 [not disassembled/data/unknown]
+0D35: 4A [not disassembled/data/unknown]
+0D36: 4B [not disassembled/data/unknown]
+0D37: 4C [not disassembled/data/unknown]
+0D38: 3A [not disassembled/data/unknown]
+0D39: 4E [not disassembled/data/unknown]
+0D3A: 4D [not disassembled/data/unknown]
+0D3B: 3C [not disassembled/data/unknown]
+0D3C: 3E [not disassembled/data/unknown]
+0D3D: 3F [not disassembled/data/unknown]
+0D3E: 22 [not disassembled/data/unknown]
+0D3F: 20 [not disassembled/data/unknown]
+0D40: 7E [not disassembled/data/unknown]
+0D41: 21 [not disassembled/data/unknown]
+0D42: 40 [not disassembled/data/unknown]
+0D43: 23 [not disassembled/data/unknown]
+0D44: 24 [not disassembled/data/unknown]
+0D45: 25 [not disassembled/data/unknown]
+0D46: 51 [not disassembled/data/unknown]
+0D47: 57 [not disassembled/data/unknown]
+0D48: 45 [not disassembled/data/unknown]
+0D49: 52 [not disassembled/data/unknown]
+0D4A: 54 [not disassembled/data/unknown]
+0D4B: 41 [not disassembled/data/unknown]
+0D4C: 53 [not disassembled/data/unknown]
+0D4D: 44 [not disassembled/data/unknown]
+0D4E: 46 [not disassembled/data/unknown]
+0D4F: 47 [not disassembled/data/unknown]
+0D50: 5A [not disassembled/data/unknown]
+0D51: 58 [not disassembled/data/unknown]
+0D52: 43 [not disassembled/data/unknown]
+0D53: 56 [not disassembled/data/unknown]
+0D54: 42 [not disassembled/data/unknown]
+ram:0d55: D5 PUSH DE
+ram:0d56: C5 PUSH BC
+ram:0d57: 2A AF D0 LD HL,(0xd0af)
+ram:0d5a: 7C LD A,H
+ram:0d5b: B5 OR L
+ram:0d5c: 28 0A JR Z,0x0d68
+ram:0d5e: 11 00 00 LD DE,0x0
+ram:0d61: ED 53 AF D0 LD (0xd0af),DE
+ram:0d65: C3 05 0E JP 0x0e05
+ram:0d68: CD BE 0C CALL 0x0cbe
+ram:0d6b: B7 OR A
+ram:0d6c: CA 05 0E JP Z,0x0e05
+ram:0d6f: ED 5B 88 D0 LD DE,(0xd088)
+ram:0d73: 3A 87 D0 LD A,(0xd087)
+ram:0d76: A3 AND E
+ram:0d77: B4 OR H
+ram:0d78: 32 88 D0 LD (0xd088),A
+ram:0d7b: 26 00 LD H,0x0
+ram:0d7d: CB BD RES 0x7,L
+ram:0d7f: 29 ADD HL,HL
+ram:0d80: 29 ADD HL,HL
+ram:0d81: 11 64 09 LD DE,0x964
+ram:0d84: 19 ADD HL,DE
+ram:0d85: 5E LD E,(HL)
+ram:0d86: 23 INC HL
+ram:0d87: 56 LD D,(HL)
+ram:0d88: 23 INC HL
+ram:0d89: B7 OR A
+ram:0d8a: EB EX DE,HL
+ram:0d8b: E9 JP (HL)
+ram:0d8c: 21 88 D0 LD HL,0xd088
+ram:0d8f: 1A LD A,(DE)
+ram:0d90: AE XOR (HL)
+ram:0d91: 77 LD (HL),A
+ram:0d92: 18 D4 JR 0x0d68
+ram:0d94: EB EX DE,HL
+ram:0d95: 6E LD L,(HL)
+ram:0d96: 26 00 LD H,0x0
+ram:0d98: 18 63 JR 0x0dfd
+ram:0d9a: EB EX DE,HL
+ram:0d9b: 6E LD L,(HL)
+ram:0d9c: 3A 88 D0 LD A,(0xd088)
+ram:0d9f: E6 1F AND 0x1f
+ram:0da1: 67 LD H,A
+ram:0da2: 18 59 JR 0x0dfd
+ram:0da4: 1A LD A,(DE)
+ram:0da5: 6F LD L,A
+ram:0da6: 3A 88 D0 LD A,(0xd088)
+ram:0da9: E6 1F AND 0x1f
+ram:0dab: 67 LD H,A
+ram:0dac: E6 1C AND 0x1c
+ram:0dae: 20 4D JR NZ,0x0dfd
+ram:0db0: 3E 03 LD A,0x3
+ram:0db2: A4 AND H
+ram:0db3: 28 48 JR Z,0x0dfd
+ram:0db5: EB EX DE,HL
+ram:0db6: 23 INC HL
+ram:0db7: 6E LD L,(HL)
+ram:0db8: 26 00 LD H,0x0
+ram:0dba: 18 0F JR 0x0dcb
+ram:0dbc: 1A LD A,(DE)
+ram:0dbd: 6F LD L,A
+ram:0dbe: 3A 88 D0 LD A,(0xd088)
+ram:0dc1: 67 LD H,A
+ram:0dc2: B7 OR A
+ram:0dc3: 28 38 JR Z,0x0dfd
+ram:0dc5: EB EX DE,HL
+ram:0dc6: 23 INC HL
+ram:0dc7: 6E LD L,(HL)
+ram:0dc8: E6 1C AND 0x1c
+ram:0dca: 67 LD H,A
+ram:0dcb: 3A 85 D0 LD A,(0xd085)
+ram:0dce: B7 OR A
+ram:0dcf: 28 2C JR Z,0x0dfd
+ram:0dd1: 3A 88 D0 LD A,(0xd088)
+ram:0dd4: E6 03 AND 0x3
+ram:0dd6: 28 25 JR Z,0x0dfd
+ram:0dd8: FE 03 CP 0x3
+ram:0dda: 28 21 JR Z,0x0dfd
+ram:0ddc: 0F RRCA
+ram:0ddd: 30 10 JR NC,0x0def
+ram:0ddf: E5 PUSH HL
+ram:0de0: 7D LD A,L
+ram:0de1: 21 3F 0D LD HL,0xd3f
+ram:0de4: 01 16 00 LD BC,0x16
+ram:0de7: ED B1 CPIR
+ram:0de9: E1 POP HL
+ram:0dea: C2 68 0D JP NZ,0x0d68
+ram:0ded: 18 0E JR 0x0dfd
+ram:0def: E5 PUSH HL
+ram:0df0: 7D LD A,L
+ram:0df1: 21 24 0D LD HL,0xd24
+ram:0df4: 01 1B 00 LD BC,0x1b
+ram:0df7: ED B1 CPIR
+ram:0df9: E1 POP HL
+ram:0dfa: C2 68 0D JP NZ,0x0d68
+ram:0dfd: E5 PUSH HL
+ram:0dfe: 2A 11 D0 LD HL,(0xd011)
+ram:0e01: 22 B5 D0 LD (0xd0b5),HL
+ram:0e04: E1 POP HL
+ram:0e05: C1 POP BC
+ram:0e06: D1 POP DE
+ram:0e07: C9 RET
+ram:0e08: D5 PUSH DE
+ram:0e09: C5 PUSH BC
+ram:0e0a: EB EX DE,HL
+ram:0e0b: ED 4B 17 D0 LD BC,(0xd017)
+ram:0e0f: CD 00 04 CALL 0x0400
+ram:0e12: CD 55 0D CALL 0x0d55
+ram:0e15: 7C LD A,H
+ram:0e16: B5 OR L
+ram:0e17: 20 30 JR NZ,0x0e49
+ram:0e19: 7A LD A,D
+ram:0e1a: B3 OR E
+ram:0e1b: 28 0A JR Z,0x0e27
+ram:0e1d: 2A 17 D0 LD HL,(0xd017)
+ram:0e20: ED 42 SBC HL,BC
+ram:0e22: B7 OR A
+ram:0e23: ED 52 SBC HL,DE
+ram:0e25: 30 1F JR NC,0x0e46
+0E27: ED [not disassembled/data/unknown]
+0E28: 76 [not disassembled/data/unknown]
+0E29: CD [not disassembled/data/unknown]
+0E2A: 3D [not disassembled/data/unknown]
+0E2B: 1F [not disassembled/data/unknown]
+0E2C: D5 [not disassembled/data/unknown]
+0E2D: 2A [not disassembled/data/unknown]
+0E2E: 11 [not disassembled/data/unknown]
+0E2F: D0 [not disassembled/data/unknown]
+0E30: ED [not disassembled/data/unknown]
+0E31: 5B [not disassembled/data/unknown]
+0E32: B5 [not disassembled/data/unknown]
+0E33: D0 [not disassembled/data/unknown]
+0E34: B7 [not disassembled/data/unknown]
+0E35: ED [not disassembled/data/unknown]
+0E36: 52 [not disassembled/data/unknown]
+0E37: ED [not disassembled/data/unknown]
+0E38: 5B [not disassembled/data/unknown]
+0E39: B3 [not disassembled/data/unknown]
+0E3A: D0 [not disassembled/data/unknown]
+0E3B: B7 [not disassembled/data/unknown]
+0E3C: ED [not disassembled/data/unknown]
+0E3D: 52 [not disassembled/data/unknown]
+0E3E: D1 [not disassembled/data/unknown]
+0E3F: 38 [not disassembled/data/unknown]
+0E40: CE [not disassembled/data/unknown]
+0E41: 21 [not disassembled/data/unknown]
+0E42: F8 [not disassembled/data/unknown]
+0E43: 00 [not disassembled/data/unknown]
+0E44: 18 [not disassembled/data/unknown]
+0E45: 03 [not disassembled/data/unknown]
+ram:0e46: 21 00 00 LD HL,0x0
+ram:0e49: C1 POP BC
+ram:0e4a: D1 POP DE
+ram:0e4b: C9 RET
+ram:0e4c: E5 PUSH HL
+ram:0e4d: 21 00 00 LD HL,0x0
+ram:0e50: CD 08 0E CALL 0x0e08
+ram:0e53: CD 20 0D CALL 0x0d20
+ram:0e56: E1 POP HL
+ram:0e57: C9 RET
+ram:0e58: E5 PUSH HL
+ram:0e59: CD 55 0D CALL 0x0d55
+ram:0e5c: 7C LD A,H
+ram:0e5d: B5 OR L
+ram:0e5e: 20 F9 JR NZ,0x0e59
+ram:0e60: E1 POP HL
+ram:0e61: C9 RET
+ram:0e62: 22 B3 D0 LD (0xd0b3),HL
+ram:0e65: E5 PUSH HL
+ram:0e66: 2A 11 D0 LD HL,(0xd011)
+ram:0e69: 22 B5 D0 LD (0xd0b5),HL
+ram:0e6c: E1 POP HL
+ram:0e6d: C9 RET
+ram:0e6e: 7C LD A,H
+ram:0e6f: 32 B1 D0 LD (0xd0b1),A
+ram:0e72: 7D LD A,L
+ram:0e73: 32 B2 D0 LD (0xd0b2),A
+ram:0e76: C9 RET
+ram:0e77: 7D LD A,L
+ram:0e78: E6 01 AND 0x1
+ram:0e7a: 32 85 D0 LD (0xd085),A
+ram:0e7d: CB 3C SRL H
+ram:0e7f: CB 1D RR L
+ram:0e81: 7D LD A,L
+ram:0e82: E6 01 AND 0x1
+ram:0e84: 28 02 JR Z,0x0e88
+ram:0e86: F6 FF OR 0xff
+ram:0e88: 32 86 D0 LD (0xd086),A
+ram:0e8b: CB 3C SRL H
+ram:0e8d: CB 1D RR L
+ram:0e8f: CB 45 BIT 0x0,L
+ram:0e91: 3E E0 LD A,0xe0
+ram:0e93: 28 02 JR Z,0x0e97
+ram:0e95: 3E C0 LD A,0xc0
+ram:0e97: 32 87 D0 LD (0xd087),A
+ram:0e9a: C9 RET
+ram:0e9b: E5 PUSH HL
+ram:0e9c: 21 00 00 LD HL,0x0
+ram:0e9f: 22 AD D0 LD (0xd0ad),HL
+ram:0ea2: 22 AF D0 LD (0xd0af),HL
+ram:0ea5: 22 8A D0 LD (0xd08a),HL
+ram:0ea8: AF XOR A
+ram:0ea9: 32 88 D0 LD (0xd088),A
+ram:0eac: 32 89 D0 LD (0xd089),A
+ram:0eaf: 32 B1 D0 LD (0xd0b1),A
+ram:0eb2: 32 B2 D0 LD (0xd0b2),A
+ram:0eb5: 21 00 00 LD HL,0x0
+ram:0eb8: CD 77 0E CALL 0x0e77
+ram:0ebb: E1 POP HL
+ram:0ebc: C9 RET
+
+### 24A1-24C3
+ram:24a1: CD 55 0D CALL 0x0d55
+ram:24a4: CD 82 26 CALL 0x2682
+ram:24a7: F8 RET M
+ram:24a8: 00 NOP
+ram:24a9: 57 LD D,A
+ram:24aa: 25 DEC H
+ram:24ab: A7 AND A
+ram:24ac: 00 NOP
+ram:24ad: 63 LD H,E
+ram:24ae: 25 DEC H
+ram:24af: 1B DEC DE
+ram:24b0: 00 NOP
+ram:24b1: 57 LD D,A
+ram:24b2: 25 DEC H
+ram:24b3: 00 NOP
+ram:24b4: 00 NOP
+ram:24b5: 21 3C D0 LD HL,0xd03c
+ram:24b8: 11 A5 23 LD DE,0x23a5
+ram:24bb: CD 8B 27 CALL 0x278b
+ram:24be: 28 63 JR Z,0x2523
+ram:24c0: C3 63 25 JP 0x2563
+
+### 25DE-267D
+ram:25de: 21 00 00 LD HL,0x0
+ram:25e1: CD D0 01 CALL 0x01d0
+ram:25e4: CD 82 26 CALL 0x2682
+ram:25e7: F8 RET M
+ram:25e8: 00 NOP
+ram:25e9: 73 LD (HL),E
+ram:25ea: 26 A7 LD H,0xa7
+ram:25ec: 00 NOP
+ram:25ed: 73 LD (HL),E
+ram:25ee: 26 1B LD H,0x1b
+ram:25f0: 00 NOP
+ram:25f1: 6E LD L,(HL)
+ram:25f2: 26 0D LD H,0xd
+ram:25f4: 00 NOP
+ram:25f5: 77 LD (HL),A
+ram:25f6: 26 08 LD H,0x8
+ram:25f8: 00 NOP
+ram:25f9: 36 26 LD (HL),0x26
+ram:25fb: 00 NOP
+ram:25fc: 00 NOP
+ram:25fd: 7A LD A,D
+ram:25fe: E6 1C AND 0x1c
+ram:2600: C2 6E 26 JP NZ,0x266e
+ram:2603: 21 E0 FF LD HL,0xffe0
+ram:2606: 19 ADD HL,DE
+ram:2607: 30 D5 JR NC,0x25de
+ram:2609: 21 80 FF LD HL,0xff80
+ram:260c: 19 ADD HL,DE
+ram:260d: 38 CF JR C,0x25de
+ram:260f: 2A EB D1 LD HL,(0xd1eb)
+ram:2612: 7C LD A,H
+ram:2613: B5 OR L
+ram:2614: 28 C8 JR Z,0x25de
+ram:2616: 2B DEC HL
+ram:2617: 22 EB D1 LD (0xd1eb),HL
+ram:261a: 7C LD A,H
+ram:261b: B5 OR L
+ram:261c: CC 84 01 CALL Z,0x0184
+ram:261f: 2A E9 D1 LD HL,(0xd1e9)
+ram:2622: 73 LD (HL),E
+ram:2623: 23 INC HL
+ram:2624: 36 00 LD (HL),0x0
+ram:2626: 22 E9 D1 LD (0xd1e9),HL
+ram:2629: 3A EF D1 LD A,(0xd1ef)
+ram:262c: B7 OR A
+ram:262d: 28 01 JR Z,0x2630
+ram:262f: 5F LD E,A
+ram:2630: 6B LD L,E
+ram:2631: CD 80 01 CALL 0x0180
+ram:2634: 18 A8 JR 0x25de
+ram:2636: 2A E9 D1 LD HL,(0xd1e9)
+ram:2639: ED 5B E7 D1 LD DE,(0xd1e7)
+ram:263d: B7 OR A
+ram:263e: ED 52 SBC HL,DE
+ram:2640: 28 9C JR Z,0x25de
+ram:2642: CD 84 01 CALL 0x0184
+ram:2645: ED 5B ED D1 LD DE,(0xd1ed)
+ram:2649: 19 ADD HL,DE
+ram:264a: 2B DEC HL
+ram:264b: E5 PUSH HL
+ram:264c: CD 8C 01 CALL 0x018c
+ram:264f: 2E 20 LD L,0x20
+ram:2651: CD 80 01 CALL 0x0180
+ram:2654: E1 POP HL
+ram:2655: CD 8C 01 CALL 0x018c
+ram:2658: CD 88 01 CALL 0x0188
+ram:265b: 2A E9 D1 LD HL,(0xd1e9)
+ram:265e: 2B DEC HL
+ram:265f: 36 00 LD (HL),0x0
+ram:2661: 22 E9 D1 LD (0xd1e9),HL
+ram:2664: 2A EB D1 LD HL,(0xd1eb)
+ram:2667: 23 INC HL
+ram:2668: 22 EB D1 LD (0xd1eb),HL
+ram:266b: C3 DE 25 JP 0x25de
+ram:266e: 2A E7 D1 LD HL,(0xd1e7)
+ram:2671: 36 00 LD (HL),0x0
+ram:2673: EB EX DE,HL
+ram:2674: CD C8 01 CALL 0x01c8
+ram:2677: 2A E7 D1 LD HL,(0xd1e7)
+ram:267a: C3 84 01 JP 0x0184
+
+### 2682-26A2
+ram:2682: D1 POP DE
+ram:2683: C5 PUSH BC
+ram:2684: E5 PUSH HL
+ram:2685: 4D LD C,L
+ram:2686: 44 LD B,H
+ram:2687: EB EX DE,HL
+ram:2688: 5E LD E,(HL)
+ram:2689: 23 INC HL
+ram:268a: 56 LD D,(HL)
+ram:268b: 23 INC HL
+ram:268c: 7A LD A,D
+ram:268d: B3 OR E
+ram:268e: 28 0F JR Z,0x269f
+ram:2690: EB EX DE,HL
+ram:2691: B7 OR A
+ram:2692: ED 42 SBC HL,BC
+ram:2694: 28 04 JR Z,0x269a
+ram:2696: 13 INC DE
+ram:2697: 13 INC DE
+ram:2698: 18 ED JR 0x2687
+ram:269a: EB EX DE,HL
+ram:269b: 5E LD E,(HL)
+ram:269c: 23 INC HL
+ram:269d: 56 LD D,(HL)
+ram:269e: EB EX DE,HL
+ram:269f: D1 POP DE
+ram:26a0: C1 POP BC
+ram:26a1: E9 JP (HL)
+
+### 01B0-01E0
+01B0: C3 [not disassembled/data/unknown]
+01B1: 77 [not disassembled/data/unknown]
+01B2: 0E [not disassembled/data/unknown]
+01B3: FF [not disassembled/data/unknown]
+01B4: C3 [not disassembled/data/unknown]
+01B5: 62 [not disassembled/data/unknown]
+01B6: 0E [not disassembled/data/unknown]
+01B7: FF [not disassembled/data/unknown]
+01B8: C3 [not disassembled/data/unknown]
+01B9: 65 [not disassembled/data/unknown]
+01BA: 0E [not disassembled/data/unknown]
+01BB: FF [not disassembled/data/unknown]
+01BC: C3 [not disassembled/data/unknown]
+01BD: 64 [not disassembled/data/unknown]
+01BE: 0B [not disassembled/data/unknown]
+01BF: FF [not disassembled/data/unknown]
+01C0: C3 [not disassembled/data/unknown]
+01C1: BE [not disassembled/data/unknown]
+01C2: 0C [not disassembled/data/unknown]
+01C3: FF [not disassembled/data/unknown]
+01C4: C3 [not disassembled/data/unknown]
+01C5: F6 [not disassembled/data/unknown]
+01C6: 0C [not disassembled/data/unknown]
+01C7: FF [not disassembled/data/unknown]
+ram:01c8: C3 20 0D JP 0x0d20
+01CB: FF [not disassembled/data/unknown]
+01CC: C3 [not disassembled/data/unknown]
+01CD: 55 [not disassembled/data/unknown]
+01CE: 0D [not disassembled/data/unknown]
+01CF: FF [not disassembled/data/unknown]
+ram:01d0: C3 08 0E JP 0x0e08
+01D3: FF [not disassembled/data/unknown]
+01D4: C3 [not disassembled/data/unknown]
+01D5: 58 [not disassembled/data/unknown]
+01D6: 0E [not disassembled/data/unknown]
+01D7: FF [not disassembled/data/unknown]
+01D8: C3 [not disassembled/data/unknown]
+01D9: 4C [not disassembled/data/unknown]
+01DA: 0E [not disassembled/data/unknown]
+01DB: FF [not disassembled/data/unknown]
+01DC: C3 [not disassembled/data/unknown]
+01DD: 9B [not disassembled/data/unknown]
+01DE: 0E [not disassembled/data/unknown]
+01DF: FF [not disassembled/data/unknown]

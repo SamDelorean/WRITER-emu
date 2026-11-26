@@ -74,16 +74,18 @@ The already instrumented event trace identifies these six characters:
 
 The matrix scan/FIFO production and the character dispatch table are now independently supported by static ROM analysis and the earlier MAME input trace. Authentic entry of `ACE135` and ROM password acceptance remain unproven because the foreground consumer was not observed consuming the post-prompt FIFO event in the last controlled run.
 
-## Important unresolved cross-check
+## Master Reset cross-check (resolved statically)
 
 **Resolved by the Ghidra phase-1 analysis (2026-11-26):** routine `0x0CF6` compares full 16-byte matrix snapshots, and the raw patterns at `0x23AC`, `0x23BC`, and `0x23DC` map to table entries `0x29` (z/Z), `0x69` (special code `0x1B`, ESC), and `0x27` (special handler `0x0D94`, data `0xA7`). The physical legend/meaning of entry `0x27` remains unresolved. Earlier F1/F2-style naming was unsupported and is withdrawn. See `KEYBOARD_PHASE1_GHIDRA_20261126.md` for the raw pattern bytes and branch analysis.
 
-## Next steps
+## Next steps — static work before emulator access
 
-1. Resolve the R2C6/R6C6 reset-pattern discrepancy by deriving the exact port/bit-to-index transform from `0x0BE2`, `0x0BD3`, and the `0x0CF6` chord comparator.
-2. Instrument each of the five modifier bits from `0x0B64` with one controlled physical/logical key at a time; label modifier semantics only after correlation.
-3. Use the table handlers to map all special keys/actions, then compare against the actual key legends.
-4. Resume the pending foreground/IRQ return investigation so queued characters are consumed after the password editor is initialized. Do not patch ROM or force FIFO consumption.
-5. Keep the keyboard work separate from the outstanding `Missing Application BIOS, 0x203B` boot blocker.
+1. Continue tracing the opaque special codes (`0x8E`, `0x97`, `0x98`, `0x9B`, `0x9D–0x9F`, `0xAD`, `0xC4`…`0xFF`) through application/editor callback tables.
+2. Trace character-set conversion and glyph/font paths to determine whether the Writer application has an alternate accent-entry mechanism. The direct keyboard-to-editor path currently resolves to 7-bit ASCII (`0x20–0x7F`); application-level accent support remains unknown.
+3. Preserve the two side-specific modifier-channel inference as provisional until their physical legends are identified. Bits 2–4 also remain unnamed.
+4. When emulator access returns, validate physical legends, modifier semantics, special keys, and any accent-entry sequence. Do not alter ROM or force FIFO consumption before that.
+5. Keep keyboard translation separate from the outstanding `Missing Application BIOS, 0x203B` boot blocker.
+
+See `KEYBOARD_PHASE2_HANDLER_ANALYSIS_20261126.md` for the handler-level findings and `KEYBOARD_SPECIAL_KEYS_20261126.tsv` for the special-key scan positions/codes.
 
 No ROM bytes, MAME driver behavior, or hardware state were modified by this analysis.

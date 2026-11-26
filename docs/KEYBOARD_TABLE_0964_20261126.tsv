@@ -107,7 +107,7 @@ index	rom_offset	handler	data0_hex	data1_hex	base	shifted
 69	0B08	0D9A	1B	00	.	.
 6A	0B0C	0D68	00	00	.	.
 6B	0B10	0D9A	EB	00	.	.
-6C	0B14	0DA4	27	22	'	"
+6C	0B14	0DA4	27	22	'	""""
 6D	0B18	0D68	00	00	.	.
 6E	0B1C	0D68	00	00	.	.
 6F	0B20	0D68	00	00	.	.

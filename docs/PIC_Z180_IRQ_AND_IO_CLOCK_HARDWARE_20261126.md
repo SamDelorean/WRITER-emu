@@ -1,7 +1,7 @@
 # The Writer — PIC/Z180: interrupciones, reloj de actividad y matriz de teclado
 
 **Fecha:** 2026-11-26
-**Repositorio:** `SamDelorean/writer-emu`
+**Repositorio:** `SamDelorean/WRITER-emu`
 **Rama de trabajo:** `fix/irq1-ra2-wakeup`
 **Alcance:** consolidación de continuidad física, análisis estático de ROM/PIC y correlación con el decodificador U19. Este informe no modifica el firmware ni añade comportamiento al emulador.
 

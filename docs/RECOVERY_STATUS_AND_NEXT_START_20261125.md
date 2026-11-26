@@ -220,7 +220,7 @@ Se revisaron el libro de referencia, el DOCX de continuidad U11, el driver MAME 
 
 Se creó la matriz exacta de medición: `docs/SRAM_BUS_CONTINUITY_TEST_MATRIX_20261125.md`. Referencias de pinout contrastadas:
 - U21 SN74HC139N: pinout 16 pines y ocho salidas activas-bajas según TI SCLS108E Rev. E.
-- U1 Z8S180 PLCC-68: /MREQ pin 63, /WR pin 66, /RD pin 67; A17 pin 32, A18/TOUT pin 33 y A19 pin 35, según Zilog DS006002-ZMP0200.
+- U14 Z8S180 PLCC-68: /MREQ pin 63, /WR pin 66, /RD pin 67; A17 pin 32, A18/TOUT pin 33 y A19 pin 35, según Zilog DS006002-ZMP0200.
 - SRAM U16/U17: /CS1 pin 22, /OE pin 24, /WE pin 29 y CS2 pin 30 según K6X1008C2D_SAM.pdf.
 
 **Hipótesis de trabajo, no resultados:** /CS1 de cada SRAM podría venir de dos salidas distintas de U21; /OE podría llegar a /RD y /WE a /WR; las dos SRAM podrían compartir A0–A16 y D0–D7, con la selección individual realizada por decodificación alta. Cada una de esas relaciones requiere continuidad medida.

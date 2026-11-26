@@ -66,7 +66,7 @@ Orientación: determinar pin 1 en la placa por la muesca/marca del encapsulado a
 
 La tabla de verdad TI indica que, con G=0, únicamente la salida seleccionada pasa a bajo; con G=1 todas las salidas quedan altas. El orden de selección es Y0 con B=0,A=0; Y1 con B=0,A=1; Y2 con B=1,A=0; Y3 con B=1,A=1.
 
-### U1 — Zilog Z8S180, encapsulado PLCC-68
+### U14 — Zilog Z8S180, encapsulado PLCC-68
 
 Fuente: Zilog, DS006002-ZMP0200, Figura 3 y Tabla 1. Las señales con barra son activas en bajo.
 
@@ -127,9 +127,9 @@ Registrar la menor resistencia estable de cada par. La expectativa de trabajo es
 ### Prueba B — habilitaciones y entradas de U21
 
 Comprobar continuidad desde:
-- U21 pin 1 (/1G) hacia U1 /MREQ pin 63 y, si no es directo, hacia lógica intermedia.
-- U21 pin 15 (/2G) hacia U1 /MREQ pin 63 y, si no es directo, hacia lógica intermedia.
-- U21 pin 2 (1A), pin 3 (1B), pin 14 (2A), pin 13 (2B) hacia U1 A17 pin 32, A18/TOUT pin 33, A19 pin 35 u otras señales que aparezcan en continuidad.
+- U21 pin 1 (/1G) hacia U14 /MREQ pin 63 y, si no es directo, hacia lógica intermedia.
+- U21 pin 15 (/2G) hacia U14 /MREQ pin 63 y, si no es directo, hacia lógica intermedia.
+- U21 pin 2 (1A), pin 3 (1B), pin 14 (2A), pin 13 (2B) hacia U14 A17 pin 32, A18/TOUT pin 33, A19 pin 35 u otras señales que aparezcan en continuidad.
 
 No asignar A17/A18/A19 a una entrada concreta hasta medirla. A18 comparte función secundaria TOUT; la conexión física y el modo del Z180 deben comprobarse por separado.
 
@@ -137,10 +137,10 @@ No asignar A17/A18/A19 a una entrada concreta hasta medirla. A18 comparte funci�
 
 | Origen SRAM | Candidato directo Z180 | Resultado |
 |---|---|---|
-| U16 pin 24 /OE | U1 pin 67 /RD | medir |
-| U17 pin 24 /OE | U1 pin 67 /RD | medir |
-| U16 pin 29 /WE | U1 pin 66 /WR | medir |
-| U17 pin 29 /WE | U1 pin 66 /WR | medir |
+| U16 pin 24 /OE | U14 pin 67 /RD | medir |
+| U17 pin 24 /OE | U14 pin 67 /RD | medir |
+| U16 pin 29 /WE | U14 pin 66 /WR | medir |
+| U17 pin 29 /WE | U14 pin 66 /WR | medir |
 
 Si no hay continuidad directa, identificar primero el componente intermedio; no modificar el modelo del emulador suponiendo que /RD o /WR se conectan directamente.
 

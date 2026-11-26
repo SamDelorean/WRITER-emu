@@ -174,9 +174,9 @@ Se revisaron las fotografías de U21 y se contrastó el pinout con Texas Instrum
 
 La tabla de verdad TI confirma que con G=0 una salida seleccionada pasa a bajo y las otras quedan altas; con G=1 todas quedan altas. Por tanto es eléctricamente compatible con una función de selección /CS1, pero no prueba que U21 esté conectado a U16/U17 de esa forma.
 
-### U1 — Z8S180 PLCC-68: candidatos para continuidad
+### U14 — Z8S180 PLCC-68: candidatos para continuidad
 
-| Señal | Pin U1 | Uso en la matriz |
+| Señal | Pin U14 | Uso en la matriz |
 |---|---:|---|
 | A0–A16 | 14–31 (con hueco de VSS pin 18) | Direcciones de SRAM candidatas |
 | A17 | 32 | Posible entrada de selección alta |
@@ -193,8 +193,8 @@ El mapa completo pin-a-pin está en docs/SRAM_BUS_CONTINUITY_TEST_MATRIX_2026112
 
 1. Salida U21 que presenta continuidad con U16 pin 22 /CS1.
 2. Salida U21 que presenta continuidad con U17 pin 22 /CS1.
-3. Si /OE 24 de cada SRAM llega directamente a U1 /RD 67.
-4. Si /WE 29 de cada SRAM llega directamente a U1 /WR 66.
+3. Si /OE 24 de cada SRAM llega directamente a U14 /RD 67.
+4. Si /WE 29 de cada SRAM llega directamente a U14 /WR 66.
 5. Continuidad completa de los buses A0–A16 e I/O1–I/O8.
 6. Entradas y habilitaciones U21 que determinan el banco seleccionado.
 

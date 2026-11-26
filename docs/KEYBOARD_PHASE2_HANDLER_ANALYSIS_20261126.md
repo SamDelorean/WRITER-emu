@@ -107,7 +107,7 @@ To close the accent question without an emulator, the next static-analysis targe
 3. Search for ROM tables containing high-bit character codes and determine whether any are reached from keyboard/editor paths.
 4. Determine whether the Writer firmware exposes a compose/dead-key or alternate-character API through its ROM jump table.
 
-Until those steps are complete, classify accent support as **not present in the direct keymap; application-level support unknown**.
+The phase-3 display-path analysis further confirms that ordinary display text is 7-bit: high-bit values are interpreted as controller commands, and the four built-in custom glyphs are block/blank patterns rather than accented letters. Thus the normal keyboard-to-editor-to-display path is 7-bit ASCII. Application-specific bitmap or banked-ROM alternatives remain outside the current low-64-KiB analysis; see `KEYBOARD_PHASE3_DISPLAY_AND_ACCENTS_20261126.md`.
 
 ## 6. Special-key index inventory
 

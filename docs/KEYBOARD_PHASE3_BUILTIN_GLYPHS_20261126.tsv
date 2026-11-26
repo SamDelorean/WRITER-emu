@@ -1,0 +1,5 @@
+record_address	slot	bitmap_row_0	bitmap_row_1	bitmap_row_2	bitmap_row_3	bitmap_row_4	bitmap_row_5	bitmap_row_6	bitmap_row_7
+08A1	0C	00	00	00	00	00	00	00	00
+08AA	0D	1F	1F	1F	1F	00	00	00	00
+08B3	0E	00	00	00	00	1F	1F	1F	1F
+08BC	0F	1F	1F	1F	1F	1F	1F	1F	1F

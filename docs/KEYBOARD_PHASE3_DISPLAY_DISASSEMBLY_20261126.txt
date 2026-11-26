@@ -1,0 +1,107 @@
+
+### 0812-0854
+ram:0812: C5 PUSH BC
+ram:0813: 7D LD A,L
+ram:0814: B7 OR A
+ram:0815: FA JP M,0x0837
+ram:0818: F6 OR 0x80
+ram:081a: 01 LD BC,0xc0
+ram:081d: CD CALL 0x07ca
+ram:0820: 3E LD A,0xc
+ram:0822: 01 LD BC,0xc2
+ram:0825: CD CALL 0x07ca
+ram:0828: 3A LD A,(0xd07d)
+ram:082b: 01 LD BC,0xc0
+ram:082e: ED LD (0xd07e),BC
+ram:0832: CD CALL 0x07ca
+ram:0835: 18 JR 0x0852
+ram:0837: 01 LD BC,0xc2
+ram:083a: CD CALL 0x07ca
+ram:083d: 3E LD A,0xc
+ram:083f: 01 LD BC,0xc0
+ram:0842: CD CALL 0x07ca
+ram:0845: 3A LD A,(0xd07d)
+ram:0848: 01 LD BC,0xc2
+ram:084b: ED LD (0xd07e),BC
+ram:084f: CD CALL 0x07ca
+ram:0852: C1 POP BC
+ram:0853: C9 RET
+
+### 0874-08A1
+ram:0874: D5 PUSH DE
+ram:0875: 7E LD A,(HL)
+ram:0876: 23 INC HL
+ram:0877: D6 SUB 0x8
+ram:0879: CB SLA A
+ram:087b: CB SLA A
+ram:087d: CB SLA A
+ram:087f: C6 ADD A,0x40
+ram:0881: CD CALL 0x07ca
+ram:0884: 16 LD D,0x8
+ram:0886: 7E LD A,(HL)
+ram:0887: 23 INC HL
+ram:0888: CD CALL 0x07ce
+ram:088b: 15 DEC D
+ram:088c: 20 JR NZ,0x0886
+ram:088e: D1 POP DE
+ram:088f: C9 RET
+ram:0890: C5 PUSH BC
+ram:0891: E5 PUSH HL
+ram:0892: 01 LD BC,0xc0
+ram:0895: CD CALL 0x0874
+ram:0898: E1 POP HL
+ram:0899: 01 LD BC,0xc2
+ram:089c: CD CALL 0x0874
+ram:089f: C1 POP BC
+ram:08a0: C9 RET
+
+### 08A1-08C5
+08A1: 0C [data/unknown]
+08A2: 00 [data/unknown]
+08A3: 00 [data/unknown]
+08A4: 00 [data/unknown]
+08A5: 00 [data/unknown]
+08A6: 00 [data/unknown]
+08A7: 00 [data/unknown]
+08A8: 00 [data/unknown]
+08A9: 00 [data/unknown]
+08AA: 0D [data/unknown]
+08AB: 1F [data/unknown]
+08AC: 1F [data/unknown]
+08AD: 1F [data/unknown]
+08AE: 1F [data/unknown]
+08AF: 00 [data/unknown]
+08B0: 00 [data/unknown]
+08B1: 00 [data/unknown]
+08B2: 00 [data/unknown]
+08B3: 0E [data/unknown]
+08B4: 00 [data/unknown]
+08B5: 00 [data/unknown]
+08B6: 00 [data/unknown]
+08B7: 00 [data/unknown]
+08B8: 1F [data/unknown]
+08B9: 1F [data/unknown]
+08BA: 1F [data/unknown]
+08BB: 1F [data/unknown]
+08BC: 0F [data/unknown]
+08BD: 1F [data/unknown]
+08BE: 1F [data/unknown]
+08BF: 1F [data/unknown]
+08C0: 1F [data/unknown]
+08C1: 1F [data/unknown]
+08C2: 1F [data/unknown]
+08C3: 1F [data/unknown]
+08C4: 1F [data/unknown]
+
+### 08C5-08E0
+ram:08c5: D5 PUSH DE
+ram:08c6: E5 PUSH HL
+ram:08c7: 21 LD HL,0x8a1
+ram:08ca: CD CALL 0x0890
+ram:08cd: 21 LD HL,0x8aa
+ram:08d0: CD CALL 0x0890
+ram:08d3: 21 LD HL,0x8b3
+ram:08d6: CD CALL 0x0890
+ram:08d9: 21 LD HL,0x8bc
+ram:08dc: CD CALL 0x0890
+ram:08df: 11 LD DE,0x29

@@ -2,7 +2,11 @@
 
 MAME-based experimental emulator for **AKT Inc. The Writer / Writer Instructor**, firmware v3.70.
 
-## Current status — 2026-11-25
+## Current status — 2026-11-26
+
+**Keyboard dispatch table found.** Static ROM analysis located a 128-entry key dispatch/translation table at `0x0964` (4 bytes/entry: handler pointer, base byte, Shift/alternate byte). The matrix scan (`0x0BE2`), modifier sampler (`0x0B64`), FIFO producer/consumer and dispatcher (`0x0D55`) are traced end to end, and most printable keys are mapped by logical row/column. The Master Reset chord's exact (row,col)↔table-index correlation is still an open discrepancy — do not hard-code F1/F2 legends yet. See [keyboard matrix and translation table](docs/KEYBOARD_MATRIX_AND_TRANSLATION_TABLE_20261126.md).
+
+**U19 (74HC138) port decoder closed.** Multimeter continuity on U14 (Z8S180), converted to real PLCC-68 pin numbers and cross-checked against an independent public copy of the Zilog pinout, confirms select A/B/C = Z180 A1/A6/A7 and enables /G2B/G1 = Z180 /IORQ/E. This exactly reproduces the already-documented firmware port map (`0x40/0x80/0x82/0xC0/0xC2`); no emulator behavior changed, only trace comments. See [U19 74HC138 pin map](docs/U19_74138_PIN_MAP_20261125.md).
 
 The previous PIC/Z180 boot deadlock has been resolved at the interconnect level. The real PIC16C54C dump executes in MAME and is linked to the Z8S180:
 

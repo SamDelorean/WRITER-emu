@@ -17,7 +17,7 @@ The previous PIC/Z180 boot deadlock has been resolved at the interconnect level.
 - PIC RB2 defaults high as the inactive J1 input level in the emulator; the physical idle voltage still needs measurement.
 - PIC RB3 currently models aggregate keyboard activity; its exact connection to U9 2A1 and the corresponding matrix column remain to be identified.
 
-The firmware recognizes the F1+F2 Master Reset chord (F1=R2C6, F2=R6C6) and reaches the password prompt. A diagnostic IRQ1-vector redirect lets the next real PIC pulse wake the Z180 from `SLP` into the original ROM routine at `0x2523`. The routine executes its initialization and writes the expected signatures `D000=916A` and `D002=5A3C`; the original IRQ1 vector `0x182A` is restored afterward. This is a real ROM-generated result, not an injected signature.
+The firmware recognizes the Master Reset chord previously identified as F1+F2 (R2C6/R6C6) and reaches the password prompt. The exact correlation between the raw chord pattern and the new 128-entry translation table is still being reconciled; do not treat those matrix labels as closed. A diagnostic IRQ1-vector redirect lets the next real PIC pulse wake the Z180 from `SLP` into the original ROM routine at `0x2523`. The routine executes its initialization and writes the expected signatures `D000=916A` and `D002=5A3C`; the original IRQ1 vector `0x182A` is restored afterward. This is a real ROM-generated result, not an injected signature.
 
 This test bypasses keyboard entry and password comparison. It does **not** validate `ACE135`. After the reset routine, the firmware reaches the `Powering Down...` path with `Missing Application BIOS, 0x203B`; application BIOS availability/loading remains unresolved.
 
@@ -34,6 +34,8 @@ The Application BIOS failure has now been traced one level deeper: ROM routine `
 A dynamic PIC trace confirms RA3→CS2 changes state: PORTA `00` drives RA3 low and PORTA `0C` drives it high. Drive photographs identify both SRAMs as Samsung K6X1008C2D-GB55 (128K×8, 32-SOP); the project datasheet assigns CS2 to pin 30, active high, and /CS1 to pin 22, active low. Therefore RA3 high asserts the shared CS2 input during ROM scan `0x2206`. Full chip selection remains unresolved because /CS1 must also be low and its per-chip routing is not yet traced. See [SRAM hardware evidence](docs/SRAM_K6X1008C2D_HARDWARE_EVIDENCE_20261125.md) and [PIC RA3 / SRAM CS2 trace](docs/RA3_SRAM_CS2_TRACE_20261125.md).
 
 Password-key capture remains a separate unresolved path. The 64 KiB RAM capture is only the logical `0000–FFFF` window, not the complete 256 KiB physical SRAM image.
+
+The keyboard findings and broader reverse-engineering state (including the corrected Z180 Ghidra processor selection, handler semantics, editor callbacks, LCD glyph path, and remaining validation gaps) are consolidated in [Reverse-engineering status — 2026-11-26](docs/REVERSE_ENGINEERING_STATUS_20261126.md).
 
 `MACHINE_NOT_WORKING` remains set. This is not yet a complete hardware emulator.
 

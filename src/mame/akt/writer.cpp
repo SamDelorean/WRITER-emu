@@ -27,14 +27,22 @@
       - synthetic D017 1 kHz tick is disabled by default; opt-in only via
         WRITER_ENABLE_D017_TICK=1
 
+    Added 2026-11-26, from confirmed continuity (WRITER_RE_06_PIC_mapa_
+    conexiones_U11, U19_74138_PIN_MAP_20261125.md):
+      - PIC RA1 -> Z180 /RESET
+      - PIC RA4/T0CKI <- U19 /Y3 (port 0x42 write pulse; firmware is
+        confirmed to access this port repeatedly, per diag/error.log)
+
     A headless run now reaches the firmware's MEMORY ERROR WARNING and
     sleeps at PC 0x0E27. This is not a CPU deadlock: the cold SRAM signature
     is invalid. A real SRAM image or the documented master-reset procedure
     is needed to reach a normal initialized editor state.
 
-    Remaining fidelity gaps include PIC RA1 -> Z180 /RESET, PIC RA3 -> SRAM
-    CS2, PIC T0CKI <- U19 /Y3, RB4/RB5/RB6, the exact RB3 keyboard column,
-    a physical 256 KiB SRAM map/persistence, and full keycap mapping.
+    Remaining fidelity gaps include PIC RA3 -> SRAM CS2 (bus gating, not
+    yet modeled beyond trace logging), RB4/RB5/RB6, the exact RB3 keyboard
+    column, J1 (RB2) exact pin -- deferred, to be measured together with
+    other pending components -- a physical 256 KiB SRAM map/persistence,
+    and full keycap mapping.
 
     ROM data is not distributed with this source; use a dump from the
     owner's device. See README.md and docs/BOOT_BLOCKER_RESOLUTION_20261125.md.
@@ -85,6 +93,7 @@ private:
 	required_ioport_array<8> m_kb;
 	std::unique_ptr<uint8_t[]> m_mem;
 	uint8_t m_kb_strobe = 0;
+	int m_pic_ra1_last = -1;
 	int m_pic_ra2_last = -1;
 	int m_pic_ra3_last = -1;
 	bool m_trace_pic_ra3 = false;
@@ -119,6 +128,7 @@ private:
 	uint8_t kb_sense_hi_r() { return kb_sense() >> 8; }
 	uint8_t ext_io_r(offs_t offset);
 	void ext_io_w(offs_t offset, uint8_t data);
+	void pic_t0cki_pulse_w(uint8_t data);
 	uint8_t lcd_r(offs_t offset);
 	void lcd_w(offs_t offset, uint8_t data);
 	void report_writes();
@@ -137,8 +147,13 @@ private:
 	uint64_t m_ui_frame_counter = 0;
 	void ui_frame_dump(screen_device &screen, bitmap_ind16 &bitmap);
 
-	// PIC RA4/T0CKI is a separate external input from U19 /Y3. Its decoder
-	// source has not been verified, so leave the RTCC input unclocked for now.
+	// PIC RA4/T0CKI (U11 pin 3) <- U19 /Y3 (pin 12), confirmed continuity
+	// (docs/U19_74138_PIN_MAP_20261125.md, WRITER_RE_06_PIC_mapa_conexiones_U11).
+	// U19 select A/B/C = Z180 A1/A6/A7; /Y3 = (C,B,A)=(0,1,1) = A7=0,A6=1,A1=1
+	// = port 0x42, qualified by /G2B=/IORQ and G1=E (valid I/O bus cycle only).
+	// diag/error.log confirms the firmware actually writes port 0x42
+	// repeatedly from PC=0406 ("IOWR 0042 = 00/01"), so /Y3 really does pulse
+	// during normal operation; see pic_t0cki_pulse_w().
 	uint8_t pic_porta_r() { return 0x00; }
 
 	// PIC pin1 (RA2) = Z180 pin11 (/INT1), per continuity measurement
@@ -166,6 +181,10 @@ private:
 	// PIC disassembly shows RA2 pulses low/high at words 0x0C1-0x0C2;
 	// board continuity confirms RA2 -> active-low Z180 /INT1. Therefore
 	// drive IRQ1 from RA2. RB0 -> RXA1 is also wired in pic_portb_w().
+	// PIC pin18 (RA1) = Z180 pin8 (/RESET), per continuity measurement
+	// (WRITER_RE_06_PIC_mapa_conexiones_U11, 2026-11-22, "Confirmado"; also
+	// R19 10k pull-up to +5V on the same net, consistent with an
+	// active-low, normally-inactive reset driven by the PIC).
 	void pic_porta_w(uint8_t data)
 	{
 		const int ra3_high = BIT(data, 3);
@@ -179,6 +198,12 @@ private:
 		if (ra2_high != m_pic_ra2_last) {
 			logerror("PIC RA2=%d -> Z180 /INT1 %s\n", ra2_high, ra2_high ? "CLEAR" : "ASSERT");
 			m_pic_ra2_last = ra2_high;
+		}
+		const int ra1_high = BIT(data, 1);
+		m_maincpu->set_input_line(INPUT_LINE_RESET, ra1_high ? CLEAR_LINE : ASSERT_LINE);
+		if (ra1_high != m_pic_ra1_last) {
+			logerror("PIC RA1=%d -> Z180 /RESET %s\n", ra1_high, ra1_high ? "CLEAR" : "ASSERT");
+			m_pic_ra1_last = ra1_high;
 		}
 	}
 	void pic_portb_w(uint8_t data)
@@ -232,6 +257,11 @@ void writer_state::map_io(address_map &map)
 	map.global_mask(0xffff);
 	map(0x0000, 0x003f).noprw(); // Z180 internal registers (handled by the CPU core)
 	map(0x0040, 0xffff).rw(FUNC(writer_state::ext_io_r), FUNC(writer_state::ext_io_w)); // DIAGNOSTIC: log all other external ports
+	// U19 /Y3 -> PIC RA4/T0CKI (see pic_porta_r() comment and
+	// pic_t0cki_pulse_w()). Firmware writes this port repeatedly from
+	// PC=0406 (diag/error.log); each write is one /Y3 pulse, so one
+	// T0CKI edge. Overrides the generic diagnostic handler for this port only.
+	map(0x0042, 0x0042).w(FUNC(writer_state::pic_t0cki_pulse_w));
 	// Keyboard matrix (confirmed, routine 0CF6) overrides the logging handlers:
 	map(0x0040, 0x0040).w(FUNC(writer_state::kb_strobe_w));   // row strobe (74HC374)
 	map(0x0080, 0x0080).r(FUNC(writer_state::kb_sense_lo_r)); // columns 0-7  (74VHC244 #1)
@@ -335,6 +365,19 @@ uint8_t writer_state::ext_io_r(offs_t offset)
 void writer_state::ext_io_w(offs_t offset, uint8_t data)
 {
 	logerror("IOWR %04X = %02X PC=%04X\n", offset + 0x40, data, m_maincpu->pc());
+}
+
+// Port 0x42 write -> U19 /Y3 active-low decoder pulse -> PIC RA4/T0CKI edge.
+// The decode is qualified by /IORQ+E (one pulse per bus access), not by the
+// data value, so the byte written is irrelevant to the pulse itself; the
+// firmware's own alternating 00/01 pattern is its own bookkeeping, not a
+// T0CKI parameter. We drive both edges (assert then clear) so this works
+// regardless of the PIC's configured T0SE edge polarity.
+void writer_state::pic_t0cki_pulse_w(uint8_t data)
+{
+	m_piccpu->set_input_line(PIC16C5x_T0CKI, ASSERT_LINE);
+	m_piccpu->set_input_line(PIC16C5x_T0CKI, CLEAR_LINE);
+	logerror("IOWR 0042 = %02X PC=%04X -> U19 /Y3 pulse -> PIC T0CKI edge\n", data, m_maincpu->pc());
 }
 
 // LCD at 00C0-00C3 (confirmed by code at 07C6-088C, routine that defines a
@@ -859,7 +902,8 @@ void writer_state::writer(machine_config &config)
 
 	// REAL PIC16C54C (U11), crystal Y1 32.768 kHz (CONFIG FOSC=LP).
 	// RA2 -> /INT1, RB0 -> RXA1, RB1 <- /HALT, RB7 <- TXA1 and RB2/RB3
-	// inputs are wired in the callbacks above; T0CKI /Y3 remains pending.
+	// inputs, RA1 -> /RESET and T0CKI <- U19 /Y3 (port 0x42) are all wired
+	// in the callbacks/map above.
 	PIC16C54(config, m_piccpu, 32'768);
 	m_piccpu->set_config(0xffc); // real CONFIG word from the physical dump: CP=1, WDTE=1, FOSC=LP
 	m_piccpu->read_a().set(FUNC(writer_state::pic_porta_r));

@@ -185,35 +185,77 @@ private:
 	// (WRITER_RE_06_PIC_mapa_conexiones_U11, 2026-11-22, "Confirmado"; also
 	// R19 10k pull-up to +5V on the same net, consistent with an
 	// active-low, normally-inactive reset driven by the PIC).
-	void pic_porta_w(uint8_t data)
+	//
+	// mem_mask matters here: the pic16c5x core (porta_w()/portb_w() in
+	// pic16c5x.cpp) already masks `data` by the PIC's own TRIS register
+	// before calling this callback -- it passes (data & ~tris) as the
+	// value and (~tris) as mem_mask, where mem_mask bit=1 means "this pin
+	// is currently configured as an output, the data bit is valid" and
+	// bit=0 means "this pin is TRIS'd to input right now, data bit is
+	// forced 0 and does NOT reflect a driven level". Ghidra disassembly
+	// (pic_disassembly.txt, port-config routine 0x03E/0x047/0x050/0x059/
+	// 0x062/0x06B) shows the firmware itself switches TRISA=0x02 (RA1 as
+	// INPUT) in at least one of its port-preset states -- i.e. it
+	// deliberately floats RA1 and lets R19's pull-up release the Z180
+	// reset, rather than actively driving it high. A build that ignored
+	// mem_mask found the Z180 held in a one-shot reset at boot and never
+	// logged a release (2026-11-26 diagnostic run), which was only
+	// incidentally harmless because the Z180 core resets on the edge, not
+	// continuously while asserted -- not because the model was correct.
+	// RA2 has no documented external pull resistor, so when the PIC
+	// floats it we hold the last driven IRQ1 state rather than guess a
+	// release level we have no hardware evidence for.
+	void pic_porta_w(offs_t offset, uint8_t data, uint8_t mem_mask)
 	{
-		const int ra3_high = BIT(data, 3);
-		if (m_trace_pic_ra3 && ra3_high != m_pic_ra3_last) {
-			logerror("PIC RA3/CS2=%d PORTA=%02X PICPC=%03X Z180PC=%04X\n",
-				ra3_high, data, m_piccpu->pc(), m_maincpu->pc());
-			m_pic_ra3_last = ra3_high;
+		const bool ra3_is_output = BIT(mem_mask, 3);
+		if (ra3_is_output) {
+			const int ra3_high = BIT(data, 3);
+			if (m_trace_pic_ra3 && ra3_high != m_pic_ra3_last) {
+				logerror("PIC RA3/CS2=%d PORTA=%02X PICPC=%03X Z180PC=%04X\n",
+					ra3_high, data, m_piccpu->pc(), m_maincpu->pc());
+				m_pic_ra3_last = ra3_high;
+			}
 		}
-		const int ra2_high = BIT(data, 2);
-		m_maincpu->set_input_line(Z180_INPUT_LINE_IRQ1, ra2_high ? CLEAR_LINE : ASSERT_LINE);
-		if (ra2_high != m_pic_ra2_last) {
-			logerror("PIC RA2=%d -> Z180 /INT1 %s\n", ra2_high, ra2_high ? "CLEAR" : "ASSERT");
-			m_pic_ra2_last = ra2_high;
+		const bool ra2_is_output = BIT(mem_mask, 2);
+		if (ra2_is_output) {
+			const int ra2_high = BIT(data, 2);
+			m_maincpu->set_input_line(Z180_INPUT_LINE_IRQ1, ra2_high ? CLEAR_LINE : ASSERT_LINE);
+			if (ra2_high != m_pic_ra2_last) {
+				logerror("PIC RA2=%d -> Z180 /INT1 %s\n", ra2_high, ra2_high ? "CLEAR" : "ASSERT");
+				m_pic_ra2_last = ra2_high;
+			}
+		} else if (m_pic_ra2_last != -2) {
+			logerror("PIC RA2 floated (TRISA input); holding last /INT1 state (no pull resistor documented)\n");
+			m_pic_ra2_last = -2;
 		}
-		const int ra1_high = BIT(data, 1);
+		const bool ra1_is_output = BIT(mem_mask, 1);
+		const int ra1_high = ra1_is_output ? BIT(data, 1) : 1; // floating -> R19 pull-up to +5V -> released
 		m_maincpu->set_input_line(INPUT_LINE_RESET, ra1_high ? CLEAR_LINE : ASSERT_LINE);
 		if (ra1_high != m_pic_ra1_last) {
-			logerror("PIC RA1=%d -> Z180 /RESET %s\n", ra1_high, ra1_high ? "CLEAR" : "ASSERT");
+			logerror("PIC RA1=%d (TRISA %s) -> Z180 /RESET %s\n", ra1_high,
+				ra1_is_output ? "output" : "input/floating+pullup",
+				ra1_high ? "CLEAR" : "ASSERT");
 			m_pic_ra1_last = ra1_high;
 		}
 	}
-	void pic_portb_w(uint8_t data)
+	void pic_portb_w(offs_t offset, uint8_t data, uint8_t mem_mask)
 	{
 		// PIC RB0 (U11 pin 6) is physically connected to Z180 RXA1 (pin 53).
-		const int rb0 = BIT(data, 0);
-		m_maincpu->rxa1_w(rb0);
-		if (rb0 != m_pic_rb0_last) {
-			logerror("PIC RB0/TX=%d -> Z180 RXA1\n", rb0);
-			m_pic_rb0_last = rb0;
+		// Ghidra disassembly confirms TRISB keeps RB0 an output in every
+		// port-preset variant used (0x4E/0xDE/0xDA all have bit0 clear), so
+		// this is not expected to float, but guard it the same way as RA1/
+		// RA2 rather than assume: holding the last driven value if it ever
+		// does.
+		if (BIT(mem_mask, 0)) {
+			const int rb0 = BIT(data, 0);
+			m_maincpu->rxa1_w(rb0);
+			if (rb0 != m_pic_rb0_last) {
+				logerror("PIC RB0/TX=%d -> Z180 RXA1\n", rb0);
+				m_pic_rb0_last = rb0;
+			}
+		} else if (m_pic_rb0_last != -2) {
+			logerror("PIC RB0 floated (TRISB input, unexpected per firmware analysis); holding last RXA1 state\n");
+			m_pic_rb0_last = -2;
 		}
 	}
 

@@ -15,7 +15,7 @@ The previous PIC/Z180 boot deadlock has been resolved at the interconnect level.
 - PIC RB7 samples Z180 `TXA1`.
 - PIC RB1 samples Z180 `/HALT`, including the Z180's SLP state.
 - PIC RB2 defaults high as the inactive J1 input level in the emulator; the physical idle voltage still needs measurement.
-- PIC RB3 currently models aggregate keyboard activity; its exact connection to U9 2A1 and the corresponding matrix column remain to be identified.
+- PIC RB3 is physically connected to U9 pin 11 (2A1). The emulator still uses aggregate keyboard activity as a provisional approximation; the exact matrix column represented by this U9 channel and the remaining U8/U9/U10 wiring are not yet traced.
 
 The firmware recognizes the Master Reset chord previously identified as F1+F2 (R2C6/R6C6) and reaches the password prompt. The exact correlation between the raw chord pattern and the new 128-entry translation table is still being reconciled; do not treat those matrix labels as closed. A diagnostic IRQ1-vector redirect lets the next real PIC pulse wake the Z180 from `SLP` into the original ROM routine at `0x2523`. The routine executes its initialization and writes the expected signatures `D000=916A` and `D002=5A3C`; the original IRQ1 vector `0x182A` is restored afterward. This is a real ROM-generated result, not an injected signature.
 
@@ -45,10 +45,11 @@ See:
 - [Samsung K6X1008C2D-GB55 — SRAM hardware evidence and corrected pinout](docs/SRAM_K6X1008C2D_HARDWARE_EVIDENCE_20261125.md)
 - [PIC RA3 / SRAM CS2 dynamic trace](docs/RA3_SRAM_CS2_TRACE_20261125.md)
 - [SRAM bus continuity test matrix — U16/U17, U21 and Z180](docs/SRAM_BUS_CONTINUITY_TEST_MATRIX_20261125.md)
+- [PIC/Z180 IRQ, T0CKI bus clock and keyboard hardware findings](docs/PIC_Z180_IRQ_AND_IO_CLOCK_HARDWARE_20261126.md)
 
 ## Hardware model
 
-- CPU: Zilog Z8S180, 6.144 MHz.
+- CPU: Zilog Z8S180, PHI=3.072 MHz (XTAL=6.144 MHz; PHI is XTAL/2).
 - Firmware: M27C801 EPROM, 1 MiB.
 - RAM: two Samsung K6X1008C2D-GB55 SRAMs, each 128K×8 (256 KiB total); shared CS2 is U11 RA3 to pin 30 and active high. Per-chip /CS1 routing and bank map remain pending.
 - LCD: 40×4 characters, two KS0066 controllers.

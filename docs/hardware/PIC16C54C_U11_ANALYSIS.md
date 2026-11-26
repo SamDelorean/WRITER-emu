@@ -248,3 +248,19 @@ El volcado de 64 KiB guardado por `WRITER_MEM_DUMP_FILE` representa la ventana l
 8. Implementar SRAM persistente y validar el procedimiento de master reset antes de declarar un arranque normal.
 
 Las conclusiones de continuidad física anteriores prevalecen sobre las inferencias del análisis estático inicial. Mantener explícita la distinción entre conexión confirmada, nivel lógico medido y aproximación del emulador.
+
+
+## 11. Addendum 2026-11-26 — fuente de T0CKI y relación con IRQ1
+
+Esta sección actualiza las conclusiones históricas de las secciones 4, 7 y 10.2. La fuente externa de T0CKI que entonces estaba pendiente ya fue identificada:
+
+- U11 RA4/T0CKI (pin 3) tiene continuidad con U19 74x138 pin 12 (/Y3).
+- U19 decodifica A1/A6/A7 del Z180 y se habilita con /IORQ=0, E=1; /G2A está fijado a GND.
+- La ROM utiliza el helper 0x0400, cuyo OUT (C),A escribe al puerto 0x42. La selección Y3 hace que /Y3 baje durante el ciclo de E/S y vuelva a alto al terminarlo.
+- El PIC tiene OPTION=0x20: Timer0 usa T0CKI externo, flanco ascendente y prescaler 1:2. Los pulsos de bus reinician la ventana de espera del PIC. No es un temporizador de periodo fijo independiente.
+
+El mismo levantamiento físico confirma que PIC RB3 pin 9 llega a U9 pin 11 (2A1). Esto corrige el límite descrito anteriormente como “RB3 aproximado sin destino exacto”: el destino en el encapsulado está confirmado, pero no se conoce aún qué columna física de la matriz corresponde a ese canal. El emulador puede conservar una agregación provisional de actividad de teclado; no presentarla como netlist físico completo.
+
+La ROM instala indirectamente el vector INT1 D700-D701 = 0x182A mediante la rutina 0x040C con I=0xD7. El PIC RA2 pin 1 está conectado físicamente a Z180 /INT1; el handler 0x182A llama a 0x0C40, que contiene el debounce/repeat y la llamada al escáner 0x0BE2.
+
+El informe complementario ../PIC_Z180_IRQ_AND_IO_CLOCK_HARDWARE_20261126.md contiene la tabla de vectores, el helper OUT, el mapa funcional de puertos y los límites de trazado de U8/U9/U10. La numeración física de J1 permanece pendiente: no asignar número de contacto a RB2 desde esta actualización.

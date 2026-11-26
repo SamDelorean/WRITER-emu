@@ -94,6 +94,9 @@ private:
 	std::unique_ptr<uint8_t[]> m_mem;
 	uint8_t m_kb_strobe = 0;
 	int m_pic_ra1_last = -1;
+	bool m_test_disable_pic_reset = false;
+	bool m_test_logged_first_halt = false;
+	int m_test_t0cki_pulse_count = 0;
 	int m_pic_ra2_last = -1;
 	int m_pic_ra3_last = -1;
 	bool m_trace_pic_ra3 = false;
@@ -229,12 +232,14 @@ private:
 			m_pic_ra2_last = -2;
 		}
 		const bool ra1_is_output = BIT(mem_mask, 1);
-		const int ra1_high = ra1_is_output ? BIT(data, 1) : 1; // floating -> R19 pull-up to +5V -> released
+		int ra1_high = ra1_is_output ? BIT(data, 1) : 1; // floating -> R19 pull-up to +5V -> released
+		if (m_test_disable_pic_reset) ra1_high = 1; // TEST: isolate one uninterrupted Z180 boot attempt
 		m_maincpu->set_input_line(INPUT_LINE_RESET, ra1_high ? CLEAR_LINE : ASSERT_LINE);
 		if (ra1_high != m_pic_ra1_last) {
-			logerror("PIC RA1=%d (TRISA %s) -> Z180 /RESET %s\n", ra1_high,
+			logerror("PIC RA1=%d (TRISA %s) -> Z180 /RESET %s t=%.6fs\n", ra1_high,
 				ra1_is_output ? "output" : "input/floating+pullup",
-				ra1_high ? "CLEAR" : "ASSERT");
+				ra1_high ? "CLEAR" : "ASSERT", machine().time().as_double());
+			if (!ra1_high) m_test_t0cki_pulse_count = 0; // ASSERT: new attempt starting, reset T0CKI tally
 			m_pic_ra1_last = ra1_high;
 		}
 	}
@@ -383,7 +388,13 @@ uint8_t writer_state::pic_portb_r()
 	// RB1 <- Z180 /HALT (active low); RB2 <- J1 serial input (idle-high
 	// default, override with WRITER_PIC_RB2=0); RB3 <- keyboard wake;
 	// RB7 <- Z180 TXA1. RB2's physical idle level is not yet measured.
-	if (!z180_halt_pin_asserted()) data |= 0x02;
+	const bool halted = z180_halt_pin_asserted();
+	if (!halted) data |= 0x02;
+	if (halted && !m_test_logged_first_halt) {
+		m_test_logged_first_halt = true;
+		logerror("TEST: first /HALT or SLP assertion at t=%.6fs PC=%04X\n",
+			machine().time().as_double(), m_maincpu->pc());
+	}
 	if (m_pic_rb2_idle_high) data |= 0x04;
 	const bool force_wake = (m_pic_force_wake_reads > 0);
 	if (force_wake) --m_pic_force_wake_reads;
@@ -419,7 +430,9 @@ void writer_state::pic_t0cki_pulse_w(uint8_t data)
 {
 	m_piccpu->set_input_line(PIC16C5x_T0CKI, ASSERT_LINE);
 	m_piccpu->set_input_line(PIC16C5x_T0CKI, CLEAR_LINE);
-	logerror("IOWR 0042 = %02X PC=%04X -> U19 /Y3 pulse -> PIC T0CKI edge\n", data, m_maincpu->pc());
+	++m_test_t0cki_pulse_count;
+	logerror("IOWR 0042 = %02X PC=%04X t=%.6fs -> U19 /Y3 pulse -> PIC T0CKI edge (count=%d since last RA1 ASSERT)\n",
+		data, m_maincpu->pc(), machine().time().as_double(), m_test_t0cki_pulse_count);
 }
 
 // LCD at 00C0-00C3 (confirmed by code at 07C6-088C, routine that defines a
@@ -656,6 +669,11 @@ void writer_state::machine_start()
 	if (char const *force = std::getenv("WRITER_TEST_PIC_WAKE")) {
 		if (force[0] == '1') m_pic_force_wake_reads = 64;
 	}
+	if (char const *noreset = std::getenv("WRITER_TEST_DISABLE_PIC_RESET")) {
+		m_test_disable_pic_reset = (noreset[0] == '1');
+	}
+	if (m_test_disable_pic_reset)
+		logerror("TEST: PIC-driven Z180 /RESET suppressed; measuring one uninterrupted boot-to-HALT/SLP attempt\n");
 	if (char const *rb2 = std::getenv("WRITER_PIC_RB2"))
 		m_pic_rb2_idle_high = (rb2[0] != '0');
 	if (char const *trace = std::getenv("WRITER_TRACE_PIC_RA3"))

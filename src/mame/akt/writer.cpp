@@ -252,6 +252,8 @@ private:
 	}
 	void pic_portb_w(offs_t offset, uint8_t data, uint8_t mem_mask)
 	{
+		if (std::getenv("WRITER_TRACE_PIC_PORTB"))
+			logerror("PIC PORTB WRITE pc=%03X data=%02X mask=%02X RB0=%d time=%.6f\n", unsigned(m_piccpu->state_int(STATE_GENPC)), data, mem_mask, BIT(data, 0), machine().time().as_double());
 		// PIC RB0 (U11 pin 6) is physically connected to Z180 RXA1 (pin 53).
 		// Ghidra disassembly confirms TRISB keeps RB0 an output in every
 		// port-preset variant used (0x4E/0xDE/0xDA all have bit0 clear), so
@@ -407,6 +409,8 @@ uint8_t writer_state::pic_portb_r()
 	if (force_wake) --m_pic_force_wake_reads;
 	if (force_wake || any_key_pressed()) data |= 0x08;
 	if (m_z180_txa1) data |= 0x80;
+	if (std::getenv("WRITER_TRACE_PIC_PORTB") && (m_piccpu->pc() >= 0x0af && m_piccpu->pc() <= 0x0b1))
+		logerror("PIC PORTB READ pc=%03X data=%02X RB7_TXA1=%d time=%.6f\n", m_piccpu->pc(), data, BIT(data, 7), machine().time().as_double());
 	if (data != m_pic_portb_last) {
 		logerror("PIC PORTB inputs=%02X (RB1=/HALT,RB2=J1,RB3=KEY,RB7=TXA1)\n", data);
 		m_pic_portb_last = data;

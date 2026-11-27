@@ -255,3 +255,94 @@ llamadas.
 
 Sin medición física. Estado del bloqueo: SIGUE ABIERTO. Cambios de esta
 intervención: solo documentación (este archivo); sin cambios de código.
+
+## Actualización 2026-11-27 (intervención horaria, continuación de la Sección 42 del doc confidencial)
+
+Repo en VONTAR verificado al inicio: HEAD en `fix/irq1-ra2-wakeup` en
+`aea307e` (fin de la Sección 42), sin avance en paralelo del usuario. Sin
+cambios de código pendientes; solo los archivos sin trackear ya conocidos.
+
+Con la ruta correcta ya confirmada (`/home/spc/projects/mame-as2k-stable-arm64/src/devices/cpu/z180/z180.cpp`
+y `z180.h`), se completó el trazado de `m_dcntl` pedido por la Sección 41/42,
+dentro del presupuesto de 5 llamadas a Desktop Commander:
+
+1. **Valor de reset confirmado:** `z180.cpp:1741` (dentro de
+   `device_reset()`): `m_dcntl = 0xf0; // maximum number of memory and I/O
+   wait states`. Es un valor literal puesto por el propio código de MAME,
+   con ese comentario explícito -- no una inferencia nuestra.
+2. **Significado de los bits confirmado** (`z180.h:321-324`):
+   `Z180_DCNTL_MWI1=0x80`, `MWI0=0x40`, `IWI1=0x20`, `IWI0=0x10`. Con
+   `m_dcntl=0xF0` los cuatro bits están en 1: máximo de wait-states tanto de
+   memoria como de I/O.
+3. **Fórmulas de wait-states confirmadas** (`z180.h:180-181`):
+   `memory_wait_states() = (m_dcntl & 0xc0) >> 6` → con `0xF0` da **3**
+   wait-states de memoria por acceso. `io_wait_states() = (m_dcntl & 0x30)
+   == 0 ? 0 : ((m_dcntl & 0x30) >> 4) + 1` → con `0xF0` da **4** wait-states
+   de I/O por acceso.
+4. **Dónde se consumen, confirmado parcialmente:** `memory_wait_states()` se
+   usa en `z180.cpp` en el bloque de transferencia DMA (líneas 1131-1235 y
+   1309, contexto con variables `bcr1/mar1/iar1`, es decir el canal DMA, no
+   necesariamente el fetch de opcodes normal) y una vez más en línea 2034
+   (`int extra_cycles = memory_wait_states(); ... handle_io_timers(3 +
+   extra_cycles); m_icount -= 3 + extra_cycles;` -- contexto aún sin
+   identificar con certeza, probablemente refresh/M1, PENDIENTE de
+   confirmar). **No verificado todavía, y es el punto más importante que
+   falta:** si el *fetch de opcode normal* (la ruta caliente de ejecución de
+   cada instrucción del firmware, no solo DMA/refresh) también suma
+   `memory_wait_states()`/`io_wait_states()` en cada acceso a memoria/IO. Si
+   sí, el valor de reset `0xF0` (máximo) estaría multiplicando el costo de
+   CASI CADA ACCESO A MEMORIA durante todo el arranque -- explicación
+   cuantitativa plausible y fuerte del déficit de tiempo-a-SLP. Si no (si
+   solo afecta DMA/refresh, que el firmware del Writer no parece usar
+   activamente en el arranque), el efecto sería mucho menor y la pista
+   perdería fuerza.
+5. **Confirmado:** `src/mame/akt/writer.cpp` (ruta real del driver,
+   corregida: vive en `mame-as2k-stable-arm64/src/mame/akt/writer.cpp`, NO
+   en el repo público `writer-emu`) **no contiene ninguna referencia** a
+   `DCNTL`, `dcntl`, ni al puerto `0x32` -- el driver nunca lee, escribe,
+   intercepta ni loguea este registro. Cualquier valor que tenga en
+   cualquier momento del arranque es puramente el que ponga (a) el reset de
+   MAME (`0xF0`) o (b) la propia ROM del Writer vía `OUT` al puerto interno
+   0x32, sin ninguna intervención del driver.
+6. **No confirmado todavía (pendiente, próximo paso concreto):** si la ROM
+   del Writer efectivamente reprograma `DCNTL` durante el arranque. Un grep
+   rápido sobre `docs/` y `tools/` del repo público no encontró ninguna
+   nota de desensamblado mostrando un `OUT` directo al puerto `0x32`
+   (`tools/buscar_teclado.py` solo tiene una tabla de nombres de puerto que
+   incluye `0x32: 'DCNTL'`, no un hallazgo de uso real). Esto requiere
+   buscar directamente en el desensamblado de la ROM real (Ghidra / doc de
+   Drive) un `OUT (032h),A` o equivalente cerca del vector de reset, no
+   solo en los docs/tools del repo público.
+
+**Hipótesis actualizada, más concreta, aún sin confirmar:** si el fetch de
+opcode normal del Z180 también aplica wait-states de memoria/I/O según
+`DCNTL`, y la ROM del Writer NO reprograma `DCNTL` hasta pasado cierto punto
+del arranque (o nunca lo hace, asumiendo que el hardware real tiene otro
+valor de reset o un circuito externo distinto), entonces el `0xF0` de MAME
+(que es un valor de la plantilla genérica del core Z180, no necesariamente
+el del Z8018x real usado en el Writer, ni necesariamente el que tendría un
+Z180 recién salido de un `/RESET` externo del PIC en vez de un power-on
+reset) podría estar insertando wait-states de memoria/I/O que el hardware
+real no tiene en ese momento, alargando artificialmente el tiempo hasta SLP
+más allá de lo que tardaría el silicio real. **Esto sigue siendo una
+hipótesis, no una medición ni una confirmación** -- exactamente igual de
+abierta que la de carrera de tiempos (Hallazgo 3), de la cual esta pista de
+DCNTL podría ser la causa raíz subyacente (una carrera de tiempos real, pero
+causada por wait-states emulados de más, no por el diseño original).
+
+**Próximo paso concreto para la siguiente intervención:** (1) confirmar si
+el fetch de opcode normal (no DMA) también suma `memory_wait_states()`
+revisando el cuerpo de la función de ejecución principal del core (fuera de
+los bloques DMA ya localizados); (2) si es así, medir el efecto real
+forzando `m_dcntl=0` vía un parche de diagnóstico temporal (no vía un
+`WRITER_TEST_*` existente -- no hay ninguno para DCNTL todavía) y comparar
+el tiempo-a-SLP contra el valor confirmado hasta ahora de ~2.79s; (3) en
+paralelo, revisar el desensamblado Ghidra de la ROM (doc de Drive) buscando
+un `OUT` al puerto 0x32 cerca del vector de reset del Z180.
+
+Sin medición física. Estado del bloqueo: SIGUE ABIERTO -- se avanzó el
+trazado de `DCNTL` (valor de reset, significado de bits, fórmulas de
+wait-states, y confirmación de que `writer.cpp` no lo toca), pero **no**
+se confirmó todavía si eso explica cuantitativamente el déficit de tiempo
+medido. Cambios de esta intervención: solo documentación (este archivo);
+sin cambios de código.

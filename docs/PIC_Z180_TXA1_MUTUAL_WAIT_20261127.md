@@ -61,3 +61,52 @@ Trace the complete Z180 startup path and PIC timeout path to identify the intend
 - MAME core ASCI1 RX trace: `ac37e73e` (branch `as2k-vontar-stable-print-cups`).
 - This repository contains the opt-in PIC PORTB read/write trace in `src/mame/akt/writer.cpp`; it is gated by `WRITER_TRACE_PIC_PORTB`.
 - ASCI receiver trace is gated by `WRITER_TRACE_ASCI1_RX`.
+
+
+## 2026-11-27 follow-up: ROM transmit audit and reset defaults
+
+A wider static audit closes the "maybe the ROM sends the first character elsewhere" possibility for the analyzed image.
+
+### Startup order
+
+The Z180 entry path is:
+
+- `0x23EC`: CPU setup and RAM copy.
+- `0x243C`: calls `0x214B`.
+- `0x2156`: `0x214B` calls `0x064E`.
+- `0x064E` and `0x0651`: read RDR1 twice to clear stale receive data.
+- `0x0654–0x0660`: configure ASCI1:
+  - `CNTLB1 (0x03) = 0x06`
+  - `CNTLA1 (0x01) = 0x64` (TE=1, RE=1, 8-bit mode)
+  - `STAT1 (0x05) = 0x00`
+- `0x243F`: calls `0x046B`, which changes ASEXT1/external-control bits, not TDR1.
+- `0x2442`, `0x2446`, `0x244E`, `0x2452`: four calls to `0x062F`, which polls STAT1.RDRF and reads RDR1.
+
+Thus ASCI1 is configured before the four-byte receive phase. The Z180 is explicitly waiting for input at this point.
+
+### Complete transmit-register audit
+
+The Ghidra listing used for this analysis contains 10,033 lines and covers the analyzed Z180 image. It contains no `OUT0 (0x08),r` instruction (TDR1).
+
+The indirect `OUT (C),r` instructions were also checked rather than ignored:
+- `0x0404`: BC is loaded with `0x0042` (external control/timer path).
+- `0x07C6–0x07CF`: callers load BC with `0x00C0`, `0x00C2`, or adjacent LCD data/control ports.
+- `0x0D04`: BC is loaded with `0x0040` (external I/O scan path).
+
+The remaining immediate OUT instructions in the listing target ports `0x00`, `0x01`, `0x02`, `0x03`, `0x04`, `0x05`, `0x06`, `0x13`, `0x1E`, `0x1F`, `0x29`, `0x32`, `0x34`, `0x36`, `0x38`, `0x39`, `0x3A`, `0x3E`, `0x7C`, and `0x82`; none targets TDR1 at `0x08`. No `OUTI/OTIR/OUTD/OTDR` transmit path appears in the listing.
+
+This is stronger than checking only the first startup routine: no TDR1 write was found anywhere in the analyzed ROM disassembly.
+
+### PIC direction and Z180 reset level
+
+- PIC routine `0x059` loads TRISB=`0xDA`; bit 7 is one, so RB7 is configured as an input during the wait at `0x0AF–0x0B3`. The PIC is not supposed to drive the shared TXA1 net low in this phase.
+- The board continuity record `WRITER_RE_06_PIC_mapa_conexiones_U11` records Z180 TXA1 → PIC U11 RB7, pin 13, as physically confirmed.
+- MAME's Z180 ASCI reset routine calls `output_txa(1)`, sets the transmitter state to `STATE_WAIT`, and leaves TXA1 idle-high. The transmit state can emit a start bit only after a transmit-data-register value has been queued and the transmitter advances into `STATE_DATA`.
+
+### Updated conclusion and remaining hardware question
+
+For the ROM image and PIC dump under test, there is no firmware-generated first TXA1 start bit: the Z180 configures ASCI1 and waits for RXA1, while the PIC waits for TXA1 to go low before sending RXA1 data. The emulator's idle-high reset level matches the ASCI implementation's reset behavior.
+
+The remaining unresolved possibility is a difference between the analyzed dumps and the physical unit, or an external electrical condition on the TXA1 net not represented by the current driver. Continuity confirms the net connection, but does not establish its live voltage waveform or any pull network.
+
+**Next physical check:** passively observe PIC U11 RB7 (pin 13) during power-up/reset with an oscilloscope or logic analyzer, from before the first PIC wait through the reset retry. Do not drive the net. Record whether TXA1 ever produces a low-going start pulse before the PIC asserts /RESET. A DC multimeter reading alone may miss a short UART start bit. If no low pulse exists, the measured behavior agrees with the current deadlock diagnosis; if a low pulse exists, capture its timing and trace the corresponding physical Z180 TXA1 waveform before changing the model.

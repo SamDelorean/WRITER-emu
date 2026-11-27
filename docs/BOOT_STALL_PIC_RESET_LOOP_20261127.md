@@ -165,3 +165,56 @@ esta intervención antes de confirmarlo. Próximo paso: listar el directorio
 `z180/` completo e identificar dónde se dispatchea/cuenta ciclos el opcode
 `SLP`. Detalle completo en la Sección 40 del doc confidencial de Drive.
 Bloqueo SIGUE ABIERTO.
+
+## Actualización 2026-11-27 (intervención horaria, continuación de la Sección 40 del doc confidencial)
+
+Repo en VONTAR verificado limpio al inicio (HEAD `ccf802e`, solo los
+archivos sin trackear ya conocidos). Durante esta intervención se detectaron
+y sincronizaron en paralelo los commits `1a98825` (ASCI1 full-PHI no resuelve
+el bloqueo -- ver Hallazgo 4 arriba) y `02267bd` (nota de Samuel sobre el
+siguiente paso en las tablas de opcodes del core z180), con un commit de
+merge (`cda102c`) para resolver el conflicto de edición concurrente sobre
+este mismo archivo.
+
+Se completó el paso pendiente de la Sección 40: se listó
+`src/devices/cpu/z180/` completo y se localizó el dispatch de `SLP`
+(`ED 76`): `z180ed.hxx:144` llama a la macro `SLP` definida en
+`z180ops.h:964` (`_PC -= 2; m_HALT = 2;` -- re-ejecuta el opcode, igual
+patrón que `HALT`). Su ciclo está en `z180tbl.h` (`cc_ed[0x76] = 8`). Esto
+**no es relevante para el retardo de ~2.79s hasta el primer SLP**: ese
+retardo lo determinan las instrucciones ejecutadas ANTES de llegar a `ED 76`
+por primera vez (el propio firmware de arranque), no el bucle de
+reejecución de `SLP` en sí, que solo corre DESPUÉS de la primera entrada (ya
+confirmada en `writer.cpp::z180_halt_pin_asserted()`, que lee el byte crudo
+del state entry y ya trata HALT=1 y SLP=2 igual -- sin cambios, correcto,
+reconfirmado).
+
+**Pista nueva, concreta, sin verificar aún:** el registro Z180 `DCNTL`
+(`Z180_DCNTL_MWI1/MWI0` e `IWI1/IWI0`, `z180.cpp:321-328`) controla la
+inserción de wait-states reales de memoria e I/O -- es un mecanismo genérico
+del core Z180, no del modelo específico de writer.cpp, y es justo el tipo de
+parámetro que la Sección 39 proponía investigar (ciclos extra emulados antes
+de llegar a SLP que el silicio real no tendría). Se ve leído/escrito en
+`z180.cpp:709,749,969,1012` y consultado en `z180.cpp:1151-1313,1597-1605`.
+No se llegó a trazar, en esta intervención, (a) el valor de reset de
+`m_dcntl`, (b) si el firmware de la ROM del Writer escribe un valor
+distinto durante el arranque, ni (c) en qué punto exacto del bucle de
+ejecución esos bits se traducen en ciclos de reloj añadidos (los términos
+`wait_state`/`refresh` no aparecen literalmente en el código, así que el
+mecanismo usa otro nombre interno todavía no identificado).
+
+**Próximo paso concreto:** trazar desde `m_dcntl` hasta el punto donde se
+suman ciclos de espera reales en el bucle de instrucciones; confirmar en
+`z180.cpp` (no se verificó aún en esta intervención) cuál es el valor de
+reset real que el código usa para `m_dcntl`, y por separado cotejarlo
+contra la hoja de datos Zilog Z8018x; y verificar si el firmware del Writer
+reprograma DCNTL durante el arranque antes de llegar a SLP (y en qué punto
+del flujo ya desensamblado). Si el valor de reset o el momento de la
+reprogramación insertan más wait-states de los que el firmware espera, eso
+alargaría el tiempo emulado hasta SLP sin que sea un comportamiento del
+silicio real -- hipótesis a favor o en contra, nada de esto confirmado
+todavía.
+
+Sin medición física. Estado del bloqueo: SIGUE ABIERTO. Cambios de esta
+intervención: solo documentación (este archivo) y el commit de merge que
+sincroniza el trabajo en paralelo; sin cambios de código.

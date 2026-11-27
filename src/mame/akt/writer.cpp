@@ -143,6 +143,9 @@ private:
 	void report_writes();
 	TIMER_DEVICE_CALLBACK_MEMBER(d017_tick);
 	TIMER_DEVICE_CALLBACK_MEMBER(pc_trace_tick);
+	TIMER_DEVICE_CALLBACK_MEMBER(pic_ram_trace_tick);
+	bool m_test_pic_ram_trace = false;
+	uint16_t m_pic_ram_trace_last_pc = 0xffff;
 	TIMER_CALLBACK_MEMBER(test_master_reset);
 	virtual void machine_reset() override ATTR_COLD;
 
@@ -497,6 +500,34 @@ TIMER_DEVICE_CALLBACK_MEMBER(writer_state::pc_trace_tick)
 	if (m_test_pc_trace)
 		logerror("TEST: PC_TRACE t=%.6fs PC=%04X\n", machine().time().as_double(), m_maincpu->pc());
 }
+
+// Diagnostic-only PIC RAM tap (WRITER_TRACE_PIC_RAM). Logs PIC PC and the
+// four-byte TX payload (RAM 0x08-0x0B) plus its counter (RAM 0x0C) every
+// time PIC PC enters the increment routine (0x015), the transmit-call
+// routine (0x027) or the transmit-branch target (0x0B4), so the actual
+// bytes queued for the PIC->Z180 TXA1/RB0 handshake can be reconstructed
+// without guessing from the zeroed reset values alone. Logs only on PC
+// transition into a watched address to avoid duplicate spam while the PIC
+// sits there across several high-frequency ticks.
+TIMER_DEVICE_CALLBACK_MEMBER(writer_state::pic_ram_trace_tick)
+{
+	if (!m_test_pic_ram_trace)
+		return;
+	uint16_t pc = m_piccpu->pc();
+	if (pc == m_pic_ram_trace_last_pc)
+		return;
+	m_pic_ram_trace_last_pc = pc;
+	if (pc != 0x015 && pc != 0x027 && pc != 0x0b4)
+		return;
+	auto &ram = m_piccpu->space(AS_DATA);
+	uint8_t b08 = ram.read_byte(0x08);
+	uint8_t b09 = ram.read_byte(0x09);
+	uint8_t b0a = ram.read_byte(0x0a);
+	uint8_t b0b = ram.read_byte(0x0b);
+	uint8_t b0c = ram.read_byte(0x0c);
+	logerror("PIC RAM TRACE t=%.6fs pc=%03X bytes(08-0B)=%02X %02X %02X %02X counter(0C)=%02X\n",
+		machine().time().as_double(), pc, b08, b09, b0a, b0b, b0c);
+}
 // Test-only entry into the ROM's own Master Reset routine. Preserve the
 // current stack so the initial CALL at 0x2523 can return normally; the ROM
 // itself switches to its D000 stack at 0x2526.
@@ -701,6 +732,11 @@ void writer_state::machine_start()
 	{
 		m_test_pc_trace = true;
 		logerror("TEST: PC_TRACE enabled (clock=%d Hz)\n", m_maincpu->clock());
+	}
+	if (std::getenv("WRITER_TRACE_PIC_RAM"))
+	{
+		m_test_pic_ram_trace = true;
+		logerror("TEST: PIC_RAM_TRACE enabled (watch pc=015/027/0B4)\n");
 	}
 	if (char const *rb2 = std::getenv("WRITER_PIC_RB2"))
 		m_pic_rb2_idle_high = (rb2[0] != '0');
@@ -994,6 +1030,10 @@ void writer_state::writer(machine_config &config)
 	// configured (cheap, periodic no-op check) so the env var can be set
 	// without a recompile; see pc_trace_tick().
 	TIMER(config, "pc_trace_tick").configure_periodic(FUNC(writer_state::pc_trace_tick), attotime::from_msec(50));
+	// WRITER_TRACE_PIC_RAM tap: 10us period comfortably oversamples a PIC
+	// instruction cycle (Tcy = 4/32768Hz =~ 122us) so a one-cycle visit to
+	// a watched PC is not missed; opt-in only, see pic_ram_trace_tick().
+	TIMER(config, "pic_ram_trace_tick").configure_periodic(FUNC(writer_state::pic_ram_trace_tick), attotime::from_usec(10));
 
 	for (auto &lcdc : m_lcdc)
 	{

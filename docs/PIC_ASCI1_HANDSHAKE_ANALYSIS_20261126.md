@@ -154,3 +154,40 @@ La configuración `DERIVED_CLOCK(1,2)` puede ser correcta o puede estar introduc
 ## Siguiente acción técnica
 
 Consultar la documentación primaria del Z180/Z8S180 para validar la ecuación de baud rate y el reloj de entrada del BRG. En paralelo, cerrar el conteo exacto de ciclos de PIC `0x0027` y verificar la ruta de señal RB0→RXA1. La diferencia 300/150 es ahora la pista cuantitativa principal, no una causa confirmada.
+
+
+## Verificación con documentación primaria Zilog (resultado decisivo)
+
+Se consultó el manual oficial **Z8018x Family MPU User Manual, UM005004-0918**, publicado por Zilog:
+https://www.zilog.com/docs/z180/um0050.pdf
+
+La sección “Baud Rate Generator”, página impresa 144, establece para el modo BRG convencional:
+
+`baud = fPHI / ((10 + 20*PS) * 2^SS * ClockMode)`
+
+La tabla 19 (páginas impresas 142–143) incluye directamente el caso `PHI=3.072 MHz`, `PS=0`, `DR=0`, `SS=110` y da **300 bps**. La tabla 20 define ClockMode=16 cuando X1=0 y DR=0. (Fuente: Zilog UM005004-0918, pp. 142–144.)
+
+En el firmware:
+- `CNTLB1=0x06`: PS=0, DR=0, SS=110.
+- `CNTLA1=0x64`: RE=1, TE=1 y modo 8N1.
+- Las rutinas `0x046b` y `0x0482` escriben ASEXT1 (puerto 0x13) usando AND FC y OR 05/04. Ninguna instrucción establece explícitamente X1 (bit 4) ni BRG mode (bit 3); el análisis debe considerar sus valores de reset. El núcleo MAME los deja a cero al reset.
+- La frecuencia PHI del modelo es 3.072 MHz, según el comentario de configuración en `writer.cpp`, y el firmware no activa CCR7.
+
+Por tanto, la tasa objetivo de ASCI1 según el manual Zilog es **300 bps**, coincidente con la estimación PIC de aproximadamente 303 bps. La estimación de 150 bps obtenida antes no representa el hardware: proviene de la configuración del modelo MAME, que instancia el ASCI1 con `DERIVED_CLOCK(1,2)` (1.536 MHz) aunque la ecuación oficial requiere `fPHI=3.072 MHz`.
+
+### Diagnóstico actualizado
+
+**Hallazgo fuerte: probable error de factor 2 en el reloj de entrada del ASCI1 del modelo MAME.**
+
+La definición actual:
+`Z180ASCI_CHANNEL_1(config, m_asci[1], DERIVED_CLOCK(1,2));`
+
+parece inconsistente con el manual Zilog y con el valor PHI documentado. Pasar PHI completo al dispositivo produciría 300 bps con los mismos CNTLB1/ASEXT1, en lugar de 150 bps.
+
+No se cambió el código. Antes de corregirlo se debe:
+1. confirmar el contrato de reloj esperado por la interfaz del dispositivo ASCI de MAME;
+2. revisar el canal 0 para mantener consistencia con la arquitectura del núcleo;
+3. añadir una prueba/instrumentación opt-in que mida el periodo de bit calculado y la recepción real;
+4. efectuar una corrida A/B en una carpeta nueva, sin interferir con otros procesos.
+
+Este resultado sustituye la anterior incertidumbre sobre si el reloj base era PHI o PHI/2: la documentación primaria identifica explícitamente PHI en la ecuación y la tabla del caso concreto da 300 bps.

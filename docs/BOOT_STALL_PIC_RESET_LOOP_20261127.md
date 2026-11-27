@@ -5,7 +5,7 @@ existente `PIC RA1=... -> Z180 /RESET ASSERT/CLEAR`, ya presente en writer.cpp),
 corridas en VONTAR. No es inferencia: son eventos reales logueados por la
 emulación del PIC real (pic16c54_device ejecutando el dump físico de U11).
 
-## Hallazgo
+## Hallazgo 1: el PIC reinicia el Z180 cada ~2.016s, indefinidamente
 
 En una corrida normal (SIN `WRITER_TEST_DISABLE_PIC_RESET`, SIN ningún otro
 bypass de diagnóstico), el PIC pulsa `/RESET` del Z180 de forma **periódica e
@@ -17,56 +17,74 @@ sin romperse nunca):
 PIC RA1=0 (TRISA output) -> Z180 /RESET ASSERT t=2.599121s
 PIC RA1=1 (TRISA input/floating+pullup) -> Z180 /RESET CLEAR t=2.743652s
 PIC RA1=0 (TRISA output) -> Z180 /RESET ASSERT t=4.759399s
-PIC RA1=1 (TRISA input/floating+pullup) -> Z180 /RESET CLEAR t=4.903931s
 ... (se repite cada ~2.016s, sin fin, hasta el final de la corrida)
 ```
 
-Cada vez que el Z180 se reinicia, vuelve a correr su secuencia de inicialización
-de LCD desde cero (de ahí los mensajes repetidos `LCDWR ... data=30/30/30/38/
-0C/06/01/80/0C`, y las advertencias benignas del device KS0066 `"function set
-cannot be executed after other instructions..."`, que son resultado esperado
-de reintentar la secuencia de "despertar" del HD44780 sin un reset limpio de
-sus variables internas entre corridas).
-
-**Consecuencia directa:** el firmware del Z180 NUNCA llega a ejecutar el código
+**Consecuencia directa:** el firmware del Z180 nunca llega a ejecutar el código
 que imprime texto real en el LCD (confirmado: 0 escrituras `rs=1` en 30s reales
-de corrida normal), porque se reinicia antes de llegar ahí. El único modo en
-que SÍ llega a imprimir texto real (confirmado: mensaje real `"MEMORY ERROR
-WARNING!!! Data may be corrupted! ..."`) es forzando
-`WRITER_TEST_DISABLE_PIC_RESET=1`, que suprime este reinicio.
+de corrida normal), porque se reinicia antes de llegar ahí.
 
-## Relación con hallazgos previos (ver doc confidencial de Drive, secciones 30-34)
+## Hallazgo 2 (2026-11-27, actualizado): experimento descarta la hipótesis de SRAM en frío
 
-Esto es consistente con el mecanismo ya documentado del lado del PIC: el
-bucle de reintento de hasta 256 iteraciones (pulso RA2 + sondeo TMR0/PORTB,
-ver `PIC16C54C_U11_ANALYSIS.md`), que al agotarse sin encontrar la condición
-esperada, actúa sobre RA1 para reiniciar el Z180. El periodo medido (~2.016s)
-es coherente con el periodo de ~2.0-2.09s ya encontrado en el spin-loop
-Z180 (Sección 33 del doc confidencial).
+Se probó `WRITER_TEST_VALID_RAM_SIGNATURE=1` SIN `WRITER_TEST_DISABLE_PIC_RESET`
+(firma de Master Reset D000/D002 inyectada artificialmente, para ver si el
+ciclo de reset dependía de una SRAM "en frío"). Resultado: el ciclo de reset
+continuó IDÉNTICO (7 asserts en 15s, mismo periodo ~2.016s). **Esto descarta
+la hipótesis 1 del documento original** (SRAM en frío como causa). El ciclo
+no tiene nada que ver con el estado de la SRAM.
 
-## Hipótesis a evaluar (ninguna confirmada todavía)
+## Hallazgo 3 (2026-11-27): causa más probable -- carrera de tiempos entre el PIC y el Z180
 
-1. **Comportamiento esperado en frío.** En hardware real, el PIC + Z180
-   normalmente arrancan con la SRAM (con supercap C38) ya conteniendo un
-   estado válido de una sesión anterior. Una emulación "en frío" (SRAM
-   completamente vacía/sin firma de Master Reset) podría estar replicando
-   fielmente un estado que en la práctica casi nunca ocurre en el equipo real
-   (solo tras cambiar la pila/supercap). Si es así, esto NO sería un bug de
-   emulación sino el comportamiento correcto para ese caso límite.
-2. **Condición de handshake nunca satisfecha en emulación.** El PIC espera
-   alguna respuesta del Z180 (vía el enlace serial RB0->RXA1 o el pulso
-   T0CKI) dentro de la ventana de reintento, y esa respuesta podría no estar
-   llegando por una razón distinta a "SRAM vacía" -- posible desajuste de
-   timing/polaridad en el enlace serial bit-bang (ya marcado como pendiente
-   de medición física en `PIC16C54C_U11_ANALYSIS.md`, sección 3).
-3. **Combinación de ambas.**
+Revisando el código real del PIC (`PIC16C54C_U11_ANALYSIS.md` sec.4) y de
+`writer.cpp` (líneas 383-402, ya implementado correctamente): el PIC pulsa
+RA2, y luego comprueba `(PORTB & 0x82) == 0x80`, es decir:
+- RB7=1 (Z180 TXA1 en reposo/idle-high)
+- RB1=0 (Z180 /HALT asertado -- writer.cpp ya modela esto correctamente,
+  tratando tanto HALT como SLP como /HALT asertado, vía
+  `z180_halt_pin_asserted()`)
 
-## Siguiente paso sugerido
+Si no se cumple, decrementa un contador y repite; al agotrarlo, reinicia el
+Z180 (RA1).
 
-Para distinguir (1) de (2) sin medición física: probar con
-`WRITER_TEST_VALID_RAM_SIGNATURE=1` (bypass ya existente en writer.cpp que
-inyecta la firma de Master Reset D000/D002) en una corrida SIN
-`WRITER_TEST_DISABLE_PIC_RESET`, y ver si el ciclo de reset se rompe solo con
-eso. Si se rompe, apunta a (1). Si sigue reiniciando igual, apunta a (2) y
-el bit-bang serial real sí necesita medición física (ya pospuesta por el
-usuario).
+**El problema es de tiempos, no de lógica:** el Z180 tarda ~2.79s en llegar a
+SLP@0x0E27 (medido en corridas con el reset del PIC suprimido, ver Secciones
+28/33 del doc confidencial de Drive), pero el periodo completo reset-a-reset
+del PIC medido aquí es de solo ~2.016s. Es decir, **el PIC se rinde y
+reinicia el Z180 antes de que este llegue a HALT/SLP, en cada intento, sin
+excepción.** Esto explicaría el bucle infinito sin necesidad de ningún otro
+mecanismo adicional: es una carrera que el Z180 siempre pierde.
+
+Esto también conecta con el hallazgo de la Sección 33 (doc confidencial): el
+propio Z180, durante esos ~2.79s, pasa ~2.0s de ese tiempo haciendo spin en
+`ram:0636` esperando un byte serial o un tick de D017 -- que a su vez depende
+de un pulso RA2 del PIC. Es decir, hay una dependencia circular entre ambos
+lados del sistema cuyos tiempos relativos exactos (quién pulsa qué y cuándo,
+en microsegundos reales) no están medidos físicamente todavía.
+
+## Hipótesis actualizadas (ninguna confirmada por medición física)
+
+1. ~~Comportamiento esperado para SRAM en frío.~~ **DESCARTADA** (Hallazgo 2).
+2. **Carrera de tiempos PIC/Z180** (Hallazgo 3): el periodo de reintento del
+   PIC es más corto que el tiempo real que el Z180 necesita para completar
+   su primer ciclo hasta HALT/SLP. Candidato más fuerte actualmente.
+3. Una condición de handshake por el enlace serial PIC<->Z180 (bit-bang,
+   baud rate/polaridad) que nunca se satisface, independiente de los tiempos
+   de HALT (sigue sin medición física, ver `PIC16C54C_U11_ANALYSIS.md` sec.3).
+
+## Próximos pasos posibles (sin medición física)
+
+- Medir con mayor precisión, vía logs ya existentes, el momento exacto
+  (dentro del ciclo del PIC) en que se hace el pulso RA2 y la comprobación
+  de PORTB, para confirmar si el margen real es de ~0.77s de déficit
+  (2.79s necesarios vs ~2.016s disponibles) o si hay otro factor.
+- Revisar si el periodo de reintento del PIC (los contadores de
+  `PIC16C54C_U11_ANALYSIS.md` sec.2, down-counter en RAM `0x0F` para RB7,
+  contador adicional en RAM `0x0E` para TMR0) está modelado con el prescaler
+  y reloj correctos (32.768kHz, confirmado en Sección 34) -- si el conteo de
+  iteraciones real en el firmware del PIC no coincide con el medido, el
+  periodo de ~2.016s podría estar mal calculado en vez de ser un bug de
+  carrera genuino del diseño original.
+- Medición física (pendiente, pospuesta): el periodo real del PIC en el
+  hardware real podría no coincidir exactamente con el modelo actual si hay
+  algún parámetro no capturado en el desensamblado (p.ej. un NOP de
+  temporización, un WDT reset intermedio, etc.).

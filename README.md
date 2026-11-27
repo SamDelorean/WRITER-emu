@@ -46,6 +46,7 @@ See:
 - [PIC RA3 / SRAM CS2 dynamic trace](docs/RA3_SRAM_CS2_TRACE_20261125.md)
 - [SRAM bus continuity test matrix — U16/U17, U21 and Z180](docs/SRAM_BUS_CONTINUITY_TEST_MATRIX_20261125.md)
 - [PIC/Z180 IRQ, T0CKI bus clock and keyboard hardware findings](docs/PIC_Z180_IRQ_AND_IO_CLOCK_HARDWARE_20261126.md)
+- [Keyboard physical net-trace plan — U10/U8/U9 to matrix rows and columns](docs/KEYBOARD_PHYSICAL_NET_TRACE_PLAN_20261126.md)
 
 ## Hardware model
 

@@ -994,6 +994,7 @@ void writer_state::writer(machine_config &config)
 	for (auto &lcdc : m_lcdc)
 	{
 		KS0066(config, lcdc, 270'000); // TODO: clock not measured, datasheet typical clock used
+		lcdc->set_default_bios_tag("f05"); // matches alphasma.cpp (same LCD module family); real mask not measured
 		lcdc->set_lcd_size(2, 40);
 	}
 

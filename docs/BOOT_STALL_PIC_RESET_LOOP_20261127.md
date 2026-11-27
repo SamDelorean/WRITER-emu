@@ -152,3 +152,16 @@ ambas corridas con bypass.
   hardware real podría no coincidir exactamente con el modelo actual si hay
   algún parámetro no capturado en el desensamblado (p.ej. un NOP de
   temporización, un WDT reset intermedio, etc.).
+
+## Actualización 2026-11-27 (intervención horaria, continuación de Sección 39 del doc confidencial)
+
+Repo verificado limpio en VONTAR, HEAD sin cambios (`ccf802e`). Se localizó
+el core compartido `mame-as2k-stable-arm64/src/devices/cpu/z180/{z180.cpp,z180.h}`,
+pero un primer grep de `slp`, `refresh`, `extra_cycles`, `wait_state`, `IOCR`,
+`DCNTL` en `z180.cpp` no dio coincidencias: la tabla de opcodes ED (donde vive
+`SLP`, `ED 76`) probablemente está en otro archivo del mismo directorio, aún
+no inspeccionado. Se agotó el presupuesto de llamadas a Desktop Commander de
+esta intervención antes de confirmarlo. Próximo paso: listar el directorio
+`z180/` completo e identificar dónde se dispatchea/cuenta ciclos el opcode
+`SLP`. Detalle completo en la Sección 40 del doc confidencial de Drive.
+Bloqueo SIGUE ABIERTO.

@@ -88,3 +88,45 @@ en microsegundos reales) no están medidos físicamente todavía.
   hardware real podría no coincidir exactamente con el modelo actual si hay
   algún parámetro no capturado en el desensamblado (p.ej. un NOP de
   temporización, un WDT reset intermedio, etc.).
+
+## Hallazgo 4 (2026-11-27): bug de reloj ASCI1 (factor 2) confirmado contra la
+hoja de datos Zilog; prueba decisiva de la carrera aún pendiente
+
+`docs/ASCI1_FULL_PHI_AB_TEST_20261127.md` y
+`docs/PIC_ASCI1_HANDSHAKE_ANALYSIS_20261126.md` establecen, citando la hoja de
+datos oficial Zilog Z8018x UM005004-0918 (tabla 19/20, pág. 142-144), que el
+ASCI1 real corre a 300 bps con PHI=3.072MHz, PS=0, SS=110, DR=0 -- y que el
+modelo MAME actual instancia el canal 1 con `DERIVED_CLOCK(1,2)` (1.536MHz),
+dando 150 bps: la mitad de lo correcto. Un flag opt-in
+(`WRITER_TEST_ASCI1_FULL_PHI`, `z180.cpp` línea 1787) confirma por A/B el
+cambio de reloj (1,536,000Hz -> 3,072,000Hz, mismo binario/ROM). Esto encaja
+con la Sección 33 del doc de Drive: el Z180 pasa ~2.0s de sus ~2.79s hasta
+SLP@0x0E27 esperando un byte serial del PIC; al doble de velocidad ese tramo
+bajaría a ~1.0s, llevando el total a ~1.79s -- por debajo del periodo de
+reintento del PIC (~2.016s), lo que rompería la carrera del Hallazgo 3 sin
+tocar la lógica del PIC.
+
+**Esto todavía NO está verificado.** Se encontró en VONTAR un resultado sin
+commitear (`diag/error.log`, `diag/normalboot_fullphi.ppm`, timestamps
+2026-11-27 00:37-00:39) cuyo encabezado es `TEST: PIC-driven Z180 /RESET
+suppressed; measuring one uninterrupted boot-to-HALT/SLP attempt`: se corrió
+con `WRITER_TEST_DISABLE_PIC_RESET` (el bypass ya conocido), NO con el reset
+real del PIC activo. Ese log sí confirma que, con el reset suprimido, el Z180
+llega a SLP@0x0E27 en t=2.788818s (igual que mediciones previas) y continúa
+arrancando hasta imprimir texto de aplicación real en el LCD (120 escrituras
+`rs=1`, incluye "...backup data as possible..." -- primera vez documentado
+boot real más allá del init del LCD). El encabezado no indica si
+`WRITER_TEST_ASCI1_FULL_PHI=1` estaba activo en esa corrida, así que **no
+sirve como evidencia del fix de reloj** (el nombre del archivo lo sugiere,
+pero el log no lo confirma).
+
+**Prueba decisiva pendiente (siguiente paso, sin bypass de reset):** correr
+`writerdiag` con el reset del PIC ACTIVO (sin `WRITER_TEST_DISABLE_PIC_RESET`)
+y `WRITER_TEST_ASCI1_FULL_PHI=1`, >=15s reales con `-nothrottle`, y verificar:
+(a) si el conteo de `PIC RA1=0 ... /RESET ASSERT` baja a 0 o se reduce
+drásticamente frente a los ~14 ciclos/30s medidos sin el flag, y (b) si
+aparecen escrituras `rs=1` (texto real) antes de cualquier reset. Si ambos se
+cumplen, el Hallazgo 3 queda confirmado y resuelto por el fix de reloj ASCI1;
+si el reset sigue ocurriendo igual, el factor 2 de reloj no es (o no es el
+único) causante de la carrera y hay que medir el margen real con más
+precisión.

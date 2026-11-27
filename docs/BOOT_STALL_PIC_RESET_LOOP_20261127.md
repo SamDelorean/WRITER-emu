@@ -67,9 +67,73 @@ en microsegundos reales) no están medidos físicamente todavía.
 2. **Carrera de tiempos PIC/Z180** (Hallazgo 3): el periodo de reintento del
    PIC es más corto que el tiempo real que el Z180 necesita para completar
    su primer ciclo hasta HALT/SLP. Candidato más fuerte actualmente.
-3. Una condición de handshake por el enlace serial PIC<->Z180 (bit-bang,
-   baud rate/polaridad) que nunca se satisface, independiente de los tiempos
-   de HALT (sigue sin medición física, ver `PIC16C54C_U11_ANALYSIS.md` sec.3).
+3. ~~Una condición de handshake por el enlace serial PIC<->Z180 (bit-bang,
+   baud rate/polaridad) que nunca se satisface.~~ **Descartada como causa de
+   la carrera de tiempos** (Hallazgo 4: corregir el baudrate ASCI1 no cambia
+   el tiempo-a-SLP ni el bloqueo). El baud rate/polaridad exacto del enlace
+   bit-bang sigue sin medición física y puede importar para otros fines, pero
+   no es la causa del bloqueo de arranque.
+
+**Tras el Hallazgo 4, la hipótesis 2 (carrera de tiempos PIC/Z180) queda como
+la única explicación viable del bloqueo, aún pendiente de resolución.**
+Cerrarla requeriría cambiar la relación real entre el periodo de reintento
+del PIC y el tiempo que tarda el Z180 en llegar a SLP -- ninguno de los dos
+es, hasta ahora, algo que se haya identificado como corregible por software
+sin evidencia adicional (ver Sección 34 del doc confidencial: el modelo de
+reloj del PIC ya es fiel al hardware real). Sin medición física del hardware
+real (pospuesta por el usuario), no hay forma de distinguir si este
+comportamiento es el del hardware real (en cuyo caso no habría "bug" que
+corregir) o un parámetro de modelado aún no identificado.
+
+## Hallazgo 4 (2026-11-27, esta intervención): la corrección ASCI1 full-PHI NO resuelve el bloqueo
+
+Se probó la hipótesis de que el mismatch de reloj ASCI1 (150 vs 300 bps,
+ver `PIC_ASCI1_HANDSHAKE_ANALYSIS_20261126.md` y
+`ASCI1_FULL_PHI_AB_TEST_20261127.md`) pudiera estar causando o agravando esta
+carrera, ya que un receptor mal temporizado podría forzar al Z180 a salir
+siempre del spin-loop de `ram:062f` por la rama lenta (umbral D017) en vez
+de por la rama rápida (byte serial recibido), alargando el tiempo hasta SLP.
+
+Dos corridas con el binario ya existente (`writerdiag`, SHA256
+`9b549ca53b147293b4f8b83ee0560a8ee28f6e03bc023ee4cec7cc3e586642d8`,
+que ya incluye el flag opt-in `WRITER_TEST_ASCI1_FULL_PHI` fusionado en
+`mame-as2k-stable-arm64` commit `7218da95`):
+
+1. **Arranque normal (sin bypass) + `WRITER_TEST_ASCI1_FULL_PHI=1`, 35s
+   emulados:** el bucle de `/RESET` del PIC continúa indefinidamente
+   (16 asserts). El periodo cambió de ~2.016s (línea base sin el flag) a
+   ~2.160s con el flag activo. `FINAL PC=0639` en los 16 ciclos: el Z180
+   queda atrapado en el mismo spin-loop de siempre (`ram:062f-064d`), nunca
+   avanza. Cero escrituras `rs=1` (ningún texto real).
+2. **`WRITER_TEST_DISABLE_PIC_RESET=1` + `WRITER_TEST_ASCI1_FULL_PHI=1`,
+   corrida corta:** `first /HALT or SLP assertion at t=2.788818s PC=0E27` --
+   **el mismo valor exacto**, al microsegundo, que la medición original sin
+   el flag (Secciones 28/33 del doc confidencial). 120 escrituras `rs=1`
+   confirmando que el arranque completo sigue funcionando igual que antes.
+
+**Conclusión verificada:** la corrección ASCI1 full-PHI (justificada por el
+manual Zilog, corrige un mismatch real de modelado 150 vs 300 bps) no tiene
+ningún efecto medible sobre el tiempo hasta SLP ni sobre el bloqueo de
+arranque normal. Esto refuerza la Sección 33 del doc confidencial: el
+spin-loop dominante de `ram:062f` se rompe por el umbral D017/IRQ1 (pulsos
+RA2 del PIC), no por la recepción de un byte serial bien temporizado -- por
+eso corregir el baudrate no cambia nada. La hipótesis de "mismatch de reloj
+ASCI1 causa o agrava el bloqueo" queda **descartada**.
+
+**No se aplicó** `WRITER_TEST_ASCI1_FULL_PHI` como comportamiento por
+defecto en `writer.cpp`: no resuelve el bloqueo y no hay evidencia que
+justifique cambiar el default de producción. El flag queda como
+instrumentación opt-in para pruebas, igual que antes.
+
+**Anomalía sin explicar (marcada honestamente, no asumida):** el periodo de
+reintento del PIC cambió de ~2.016s a ~2.160s al activar el flag, pese a que
+el contador de reintento del PIC es puramente interno (RAM 0x0E/0x0F, reloj
+propio de 32.768 kHz) y no debería depender del reloj ASCI1 del Z180. Es
+candidato a ser un artefacto de la reprogramación del quantum/scheduler de
+MAME al cambiar el `DERIVED_CLOCK` de un dispositivo, no necesariamente un
+efecto real de hardware. No se investigó más a fondo en esta intervención;
+no cambia la conclusión principal porque el tiempo-a-SLP fue IDÉNTICO en
+ambas corridas con bypass.
 
 ## Próximos pasos posibles (sin medición física)
 
@@ -89,44 +153,15 @@ en microsegundos reales) no están medidos físicamente todavía.
   algún parámetro no capturado en el desensamblado (p.ej. un NOP de
   temporización, un WDT reset intermedio, etc.).
 
-## Hallazgo 4 (2026-11-27): bug de reloj ASCI1 (factor 2) confirmado contra la
-hoja de datos Zilog; prueba decisiva de la carrera aún pendiente
+## Actualización 2026-11-27 (intervención horaria, continuación de Sección 39 del doc confidencial)
 
-`docs/ASCI1_FULL_PHI_AB_TEST_20261127.md` y
-`docs/PIC_ASCI1_HANDSHAKE_ANALYSIS_20261126.md` establecen, citando la hoja de
-datos oficial Zilog Z8018x UM005004-0918 (tabla 19/20, pág. 142-144), que el
-ASCI1 real corre a 300 bps con PHI=3.072MHz, PS=0, SS=110, DR=0 -- y que el
-modelo MAME actual instancia el canal 1 con `DERIVED_CLOCK(1,2)` (1.536MHz),
-dando 150 bps: la mitad de lo correcto. Un flag opt-in
-(`WRITER_TEST_ASCI1_FULL_PHI`, `z180.cpp` línea 1787) confirma por A/B el
-cambio de reloj (1,536,000Hz -> 3,072,000Hz, mismo binario/ROM). Esto encaja
-con la Sección 33 del doc de Drive: el Z180 pasa ~2.0s de sus ~2.79s hasta
-SLP@0x0E27 esperando un byte serial del PIC; al doble de velocidad ese tramo
-bajaría a ~1.0s, llevando el total a ~1.79s -- por debajo del periodo de
-reintento del PIC (~2.016s), lo que rompería la carrera del Hallazgo 3 sin
-tocar la lógica del PIC.
-
-**Esto todavía NO está verificado.** Se encontró en VONTAR un resultado sin
-commitear (`diag/error.log`, `diag/normalboot_fullphi.ppm`, timestamps
-2026-11-27 00:37-00:39) cuyo encabezado es `TEST: PIC-driven Z180 /RESET
-suppressed; measuring one uninterrupted boot-to-HALT/SLP attempt`: se corrió
-con `WRITER_TEST_DISABLE_PIC_RESET` (el bypass ya conocido), NO con el reset
-real del PIC activo. Ese log sí confirma que, con el reset suprimido, el Z180
-llega a SLP@0x0E27 en t=2.788818s (igual que mediciones previas) y continúa
-arrancando hasta imprimir texto de aplicación real en el LCD (120 escrituras
-`rs=1`, incluye "...backup data as possible..." -- primera vez documentado
-boot real más allá del init del LCD). El encabezado no indica si
-`WRITER_TEST_ASCI1_FULL_PHI=1` estaba activo en esa corrida, así que **no
-sirve como evidencia del fix de reloj** (el nombre del archivo lo sugiere,
-pero el log no lo confirma).
-
-**Prueba decisiva pendiente (siguiente paso, sin bypass de reset):** correr
-`writerdiag` con el reset del PIC ACTIVO (sin `WRITER_TEST_DISABLE_PIC_RESET`)
-y `WRITER_TEST_ASCI1_FULL_PHI=1`, >=15s reales con `-nothrottle`, y verificar:
-(a) si el conteo de `PIC RA1=0 ... /RESET ASSERT` baja a 0 o se reduce
-drásticamente frente a los ~14 ciclos/30s medidos sin el flag, y (b) si
-aparecen escrituras `rs=1` (texto real) antes de cualquier reset. Si ambos se
-cumplen, el Hallazgo 3 queda confirmado y resuelto por el fix de reloj ASCI1;
-si el reset sigue ocurriendo igual, el factor 2 de reloj no es (o no es el
-único) causante de la carrera y hay que medir el margen real con más
-precisión.
+Repo verificado limpio en VONTAR, HEAD sin cambios (`ccf802e`). Se localizó
+el core compartido `mame-as2k-stable-arm64/src/devices/cpu/z180/{z180.cpp,z180.h}`,
+pero un primer grep de `slp`, `refresh`, `extra_cycles`, `wait_state`, `IOCR`,
+`DCNTL` en `z180.cpp` no dio coincidencias: la tabla de opcodes ED (donde vive
+`SLP`, `ED 76`) probablemente está en otro archivo del mismo directorio, aún
+no inspeccionado. Se agotó el presupuesto de llamadas a Desktop Commander de
+esta intervención antes de confirmarlo. Próximo paso: listar el directorio
+`z180/` completo e identificar dónde se dispatchea/cuenta ciclos el opcode
+`SLP`. Detalle completo en la Sección 40 del doc confidencial de Drive.
+Bloqueo SIGUE ABIERTO.

@@ -218,3 +218,40 @@ todavía.
 Sin medición física. Estado del bloqueo: SIGUE ABIERTO. Cambios de esta
 intervención: solo documentación (este archivo) y el commit de merge que
 sincroniza el trabajo en paralelo; sin cambios de código.
+
+## Actualización 2026-11-27 (intervención horaria, continuación de la Sección 41 del doc confidencial)
+
+Repo en VONTAR verificado al inicio: HEAD en `fix/irq1-ra2-wakeup` en
+`0fa0944` (sin avance en paralelo del usuario desde la Sección 41; sin
+cambios de código pendientes). Sin tracked changes; solo los archivos sin
+trackear ya conocidos de intervenciones previas (`cfg/`, `error.log`,
+`snap/`, `tools/__pycache__/`, `tools/dis_driver.py`).
+
+**Corrección de ruta importante para próximas intervenciones:** el árbol
+compartido `mame-as2k-stable-arm64` NO vive bajo
+`/home/spc/projects/WRITER_INSTRUCTOR/` como se asumió -- vive en
+`/home/spc/projects/mame-as2k-stable-arm64` (un nivel arriba, hermano de
+`WRITER_INSTRUCTOR/`, confirmado contra
+`docs/ASCI1_FULL_PHI_AB_TEST_20261127.md:17` y
+`docs/PIC_ASCI1_HANDSHAKE_ANALYSIS_20261126.md:10` en este mismo repo). Un
+primer intento de localizarlo con `find` acotado a `WRITER_INSTRUCTOR/`
+(maxdepth 2) no encontró nada; el `find /` de respaldo lanzado para
+compensar resultó demasiado lento para la ventana de 3s de esta
+intervención y se agotó el presupuesto de 5 llamadas a Desktop Commander
+antes de poder leer `z180.cpp` con la ruta correcta. Ese proceso de
+`find /` (PID 1024734 en VONTAR, saliendo a `/tmp/dcntl_investigation2.txt`)
+puede seguir corriendo en segundo plano en la máquina real de forma
+independiente a esta sesión; su resultado no es necesario ya que la ruta
+correcta ya quedó confirmada por otra vía (grep local del repo, sin gastar
+llamadas a Desktop Commander).
+
+**No se avanzó** el trazado de `m_dcntl` (próximo paso concreto de la
+Sección 41: valor de reset, uso en el bucle de ciclos, posible
+reprogramación por el firmware) -- queda pendiente para la siguiente
+intervención, ahora con la ruta correcta ya conocida de antemano
+(`/home/spc/projects/mame-as2k-stable-arm64/src/devices/cpu/z180/z180.cpp`),
+lo que debería permitir completarlo con margen dentro del límite de 5
+llamadas.
+
+Sin medición física. Estado del bloqueo: SIGUE ABIERTO. Cambios de esta
+intervención: solo documentación (este archivo); sin cambios de código.

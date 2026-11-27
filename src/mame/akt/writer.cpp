@@ -110,6 +110,12 @@ private:
 	bool m_test_bypass_password_to_reset = false;
 	bool m_test_redirect_irq1_to_reset = false;
 	uint16_t m_test_saved_irq1_vector = 0;
+	// Diagnostic-only PC profiler: periodically logs the current PC while
+	// WRITER_TEST_PC_TRACE_MS=<N> is set, to find where real time is spent
+	// between reset and the first SLP (used to compare the 3.072 MHz vs
+	// 6.144 MHz clock hypothesis against real elapsed time, not instruction
+	// count). Zero cost when unset.
+	bool m_test_pc_trace = false;
 	bool m_trace_input_writes = false;
 	unsigned m_trace_input_write_count = 0;
 	bool m_trace_keyboard = false;
@@ -136,6 +142,7 @@ private:
 	void lcd_w(offs_t offset, uint8_t data);
 	void report_writes();
 	TIMER_DEVICE_CALLBACK_MEMBER(d017_tick);
+	TIMER_DEVICE_CALLBACK_MEMBER(pc_trace_tick);
 	TIMER_CALLBACK_MEMBER(test_master_reset);
 	virtual void machine_reset() override ATTR_COLD;
 
@@ -474,6 +481,18 @@ TIMER_DEVICE_CALLBACK_MEMBER(writer_state::d017_tick)
 	m_mem[0xcd017] = v & 0xff;
 	m_mem[0xcd018] = v >> 8;
 }
+
+// Diagnostic-only PC profiler (WRITER_TEST_PC_TRACE_MS). Logs PC against
+// real elapsed time so two clock configurations can be compared directly:
+// if the firmware is spending real CPU cycles, the PC should advance
+// proportionally faster at a higher clock; if the PC sits in the same
+// range at the same real time regardless of clock, that range is gated by
+// something other than Z180 instruction throughput.
+TIMER_DEVICE_CALLBACK_MEMBER(writer_state::pc_trace_tick)
+{
+	if (m_test_pc_trace)
+		logerror("TEST: PC_TRACE t=%.6fs PC=%04X\n", machine().time().as_double(), m_maincpu->pc());
+}
 // Test-only entry into the ROM's own Master Reset routine. Preserve the
 // current stack so the initial CALL at 0x2523 can return normally; the ROM
 // itself switches to its D000 stack at 0x2526.
@@ -674,6 +693,11 @@ void writer_state::machine_start()
 	}
 	if (m_test_disable_pic_reset)
 		logerror("TEST: PIC-driven Z180 /RESET suppressed; measuring one uninterrupted boot-to-HALT/SLP attempt\n");
+	if (std::getenv("WRITER_TEST_PC_TRACE_MS"))
+	{
+		m_test_pc_trace = true;
+		logerror("TEST: PC_TRACE enabled (clock=%d Hz)\n", m_maincpu->clock());
+	}
 	if (char const *rb2 = std::getenv("WRITER_PIC_RB2"))
 		m_pic_rb2_idle_high = (rb2[0] != '0');
 	if (char const *trace = std::getenv("WRITER_TRACE_PIC_RA3"))
@@ -947,6 +971,12 @@ void writer_state::writer(machine_config &config)
 	// hardware, confirmed from the datasheet plus this firmware trace, not
 	// assumed.
 	Z8S180(config, m_maincpu, 3'072'000); // real PHI = crystal Y2 / 2 (CCR7 reset default 0, never changed by firmware)
+	// Diagnostic-only override to A/B-test the clock-invariance finding
+	// (Section 28/31 of the confidential RE doc): set to compare real
+	// elapsed time to SLP at a different clock without recompiling. Not
+	// used by default; real hardware is 3'072'000 (see above).
+	if (char const *hz = std::getenv("WRITER_TEST_CLOCK_HZ"))
+		m_maincpu->set_clock(std::atol(hz));
 	m_maincpu->set_addrmap(AS_PROGRAM, &writer_state::map_program);
 	m_maincpu->set_addrmap(AS_IO, &writer_state::map_io);
 	m_maincpu->txa1_wr_callback().set(FUNC(writer_state::z180_txa1_w));
@@ -954,6 +984,12 @@ void writer_state::writer(machine_config &config)
 	// Real IRQ1 now advances D017. Keep the old synthetic tick opt-in only.
 	if (std::getenv("WRITER_ENABLE_D017_TICK"))
 		TIMER(config, "d017_tick").configure_periodic(FUNC(writer_state::d017_tick), attotime::from_hz(1000));
+
+	// Diagnostic-only PC profiler, opt-in via WRITER_TEST_PC_TRACE_MS=<N>
+	// (read in machine_start()). The timer device itself is always
+	// configured (cheap, periodic no-op check) so the env var can be set
+	// without a recompile; see pc_trace_tick().
+	TIMER(config, "pc_trace_tick").configure_periodic(FUNC(writer_state::pc_trace_tick), attotime::from_msec(50));
 
 	for (auto &lcdc : m_lcdc)
 	{

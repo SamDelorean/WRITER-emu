@@ -191,3 +191,23 @@ No se cambió el código. Antes de corregirlo se debe:
 4. efectuar una corrida A/B en una carpeta nueva, sin interferir con otros procesos.
 
 Este resultado sustituye la anterior incertidumbre sobre si el reloj base era PHI o PHI/2: la documentación primaria identifica explícitamente PHI en la ecuación y la tabla del caso concreto da 300 bps.
+
+
+## Verificación final del trayecto PIC RB0 → Z180 RXA1
+
+Se inspeccionó directamente `writer_state::pic_portb_w()` en `writer.cpp`:
+- Si RB0 está configurado como salida según `mem_mask`, toma `BIT(data,0)`.
+- Entrega ese nivel directamente mediante `m_maincpu->rxa1_w(rb0)`.
+- El firmware PIC mantiene RB0 como salida en los presets TRISB documentados (`0x4E`, `0xDE`, `0xDA` tienen bit 0 en cero).
+
+Por tanto, el enlace lógico emulado RB0→RXA1 está implementado de forma directa y el callback contempla la dirección TRIS. La cadena de señal ya no es una incógnita principal; el problema cuantitativo prioritario es el reloj que se entrega al dispositivo ASCI1.
+
+## Estado de las hipótesis tras la verificación
+
+- PIC no transmite por RB0: **descartado** por desensamblado y callback.
+- RB0 no llega a RXA1 en el modelo: **descartado** por inspección del callback.
+- ASCI1 queda deshabilitado: **descartado**; CNTLA1=0x64 activa RE/TE antes de leer.
+- PIC y ASCI1 usan velocidades diferentes en el modelo: **confirmado por cálculo del código actual** (~303 vs 150 bps).
+- La diferencia procede de alimentar ASCI1 con PHI/2 en vez de PHI: **hipótesis de causa raíz fuertemente respaldada** por la fórmula y tabla oficial de Zilog; falta una prueba A/B del modelo para cerrar causalidad.
+
+El siguiente paso ya no requiere más levantamiento físico del cable RB0→RXA1. Es una prueba controlada del modelo de reloj ASCI1, manteniendo sin cambios el resto del firmware, señales y lógica.

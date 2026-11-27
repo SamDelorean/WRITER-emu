@@ -101,3 +101,56 @@ En `writer.cpp` el comentario de configuración PIC documenta RB0 → Z180 RXA1 
 3. Reconstruir el timing PIC de `0x0027` y la subrutina llamada en `0x0030`; determinar baud rate y duración de start/data/stop.
 4. Seguir las escrituras a `0x08–0x0B` desde `0x0074` hasta las cuatro llamadas de transmisión para obtener los cuatro bytes reales.
 5. Verificar en el modelo el trayecto RB0 → RXA1 y comparar la forma de onda lógica con el timing esperado, sin cambiar la lógica del emulador.
+
+
+## Segunda etapa: cadena previa y comparación de temporización
+
+### Inicialización previa a ASCI1
+
+La llamada de arranque `0x214b` invoca, en este orden:
+
+- `0x0e9b`: inicializa variables de estado/buffers en RAM (`D0AD`, `D0AF`, `D08A`, `D088`, `D089`, `D0B1`, `D0B2`) y llama a `0x0e77`.
+- `0x0938`: inicializa un periférico externo mediante dos llamadas a `0x090e` con puertos `0xC0` y `0xC2`; la secuencia escrita es `30, 30, 38, 0C, 06`. Es compatible con inicialización de un controlador LCD tipo HD44780, pero no se declara confirmado sin identificar el circuito conectado.
+- `0x0615`: prepara punteros/estado de buffers en RAM (`D071`, `D045`, `D047`) y llama a `0x0610`.
+- `0x064e`: vacía dos lecturas de RDR1 y programa CNTLB1/CNTLA1/STAT1 como se documentó arriba.
+
+Por tanto, `0x0938` parece ser inicialización de display y no una configuración ASCI1. La configuración ASCI1 está aislada en `0x064e`.
+
+### Cálculo de baud rate en el modelo MAME
+
+La implementación local `z180asci.cpp` calcula:
+
+- `CNTLB1=0x06`: SS=6, DR=0, CTS/PS=0.
+- Prescaler BRG regular: `(1 << 6) * 10 = 640`.
+- Divisor adicional de canal: 16 cuando DR=0.
+- El canal 1 se instancia en `writer.cpp` con `DERIVED_CLOCK(1,2)`.
+- CPU Z8S180: 3.072 MHz (PHI documentado como cristal de 6.144 MHz dividido entre 2).
+
+Con la configuración actual del modelo, el reloj entregado al ASCI es 1.536 MHz y la tasa calculada por la fórmula del núcleo es:
+
+`1,536,000 / (640 * 16) = 150 bit/s`.
+
+### Temporización PIC estimada por conteo de instrucciones
+
+La rutina PIC `0x0027` llama a `0x0006` en cada iteración. En el dump, `0x0006–0x0014` contiene trece NOP, CLRWDT y RETLW. Contando el CALL/retorno, el retardo es del orden de 18 ciclos de instrucción. La ruta principal de cada bit añade aproximadamente 9 ciclos (lectura/modificación de PORTB, RRF, DECFSZ y GOTO), resultando cerca de 27 ciclos por bit.
+
+Con Fosc=32.768 kHz y ciclo de instrucción Fosc/4=8.192 kHz:
+
+`8192 / 27 ≈ 303 bit/s`.
+
+Esta es una estimación estática; hay que confirmar el conteo exacto de ciclos en ambas ramas de BTFSS/DECFSZ y el primer/último intervalo. No obstante, el resultado apunta a aproximadamente 300 baudios.
+
+### Discrepancia candidata
+
+La estimación PIC (~300 bit/s) no coincide con los 150 bit/s que calcula la configuración ASCI1 actual del modelo MAME. Es una discrepancia de factor 2 que merece investigación prioritaria.
+
+No se concluye todavía que el hardware real tenga esa discrepancia ni que MAME esté equivocado. Antes hay que confirmar con documentación primaria del Z180:
+- si el reloj base del BRG ASCI1 es PHI o PHI/2;
+- cómo debe aplicarse el divisor de sobremuestreo;
+- si la conexión física de RXA1 recibe exactamente el reloj y formato esperados.
+
+La configuración `DERIVED_CLOCK(1,2)` puede ser correcta o puede estar introduciendo un factor 2 indebido; no modificarla sin cotejar la hoja de datos y el diseño de placa.
+
+## Siguiente acción técnica
+
+Consultar la documentación primaria del Z180/Z8S180 para validar la ecuación de baud rate y el reloj de entrada del BRG. En paralelo, cerrar el conteo exacto de ciclos de PIC `0x0027` y verificar la ruta de señal RB0→RXA1. La diferencia 300/150 es ahora la pista cuantitativa principal, no una causa confirmada.

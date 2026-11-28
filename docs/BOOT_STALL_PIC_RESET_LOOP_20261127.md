@@ -540,3 +540,56 @@ limitarse a comprobar la huella del archivo.
 
 Estado del bloqueo: **SIGUE ABIERTO**, sin novedad desde la intervención
 anterior.
+
+## Intervención 2026-11-28 (horaria, continuación): fingerprint sin cambios; limpieza de housekeeping pendiente desde hacía varias intervenciones
+
+Verificado al inicio: huella de `z180asci.cpp` (ambas copias) **idéntica**
+a la registrada en las dos intervenciones anteriores -- 20420 bytes, mtime
+`2026-11-27 06:53`, SHA256
+`96b23fd1435b26da8af28aa390d48d579c899c7399f24ee6bf18fa51039c1cea`. Samuel
+todavía no ha aplicado el parche del Hallazgo 7 ni ha autorizado
+explícitamente que una ejecución automática lo haga. Se revisó también el
+doc de Drive completo (secciones 1-47) buscando cualquier nota manual de
+Samuel ("Samuel:", "decisión:", etc.) -- no hay ninguna; la última entrada
+(Sección 47) es la misma intervención ya registrada aquí como
+"sin cambios". Conforme a lo indicado, esta ejecución **no reintentó
+`edit_block`** sobre `z180asci.cpp`.
+
+Con las 5 llamadas a Desktop Commander disponibles y sin trabajo posible
+sobre el bloqueo principal, se atendió un pendiente de housekeeping que
+varias intervenciones venían señalando sin actuar (`git status` en VONTAR
+mostraba `tools/dis_driver.py` sin trackear desde al menos la Sección 45):
+
+1. Se revisó `tools/dis_driver.py` (27 líneas): wrapper CLI sobre
+   `tools/z180dis.decode()` que mapea un PC lógico a offset físico de ROM
+   (`0xC0000 + PC`, según CBAR/CBR/BBR de `writer.cpp`) y vuelca 40
+   instrucciones decodificadas desde las direcciones hex dadas en
+   `argv`. Es una herramienta de análisis reutilizable (no exploratoria/de
+   prueba), útil para el próximo paso pendiente del WRITER_RE_08 (revisar
+   regiones bancadas fuera de la ventana de 64 KiB ya analizada por
+   Ghidra, buscando `OUT0 (0x33),A` o escrituras a `0xD700/0xD701`) --
+   conforme a la regla fija del proyecto ("commit y push automáticos al
+   cerrar cada tarea legítima"), se comiteó y subió en VONTAR
+   (`e2ae945`).
+2. `cfg/`, `snap/`, `error.log` y `tools/__pycache__/` también aparecían
+   sin trackear en cada ejecución horaria -- son artefactos regenerados
+   por cada corrida de `writerdiag`, no código fuente. Se añadieron a
+   `.gitignore` en VONTAR (`b650abc`) para que dejen de aparecer como
+   pendientes en los próximos check-ins.
+
+Ningún archivo del árbol MAME compartido (`z180asci.cpp`) fue tocado.
+`writerdiag` sigue siendo el binario de 2026-11-27 08:44, sin recompilar
+(no hay motivo para recompilar sin el parche aplicado). El trabajo
+físico/hardware (pines J1/RB2, continuidad RAM/U21, timing del PIC) sigue
+pausado, sin tocar, como indica la regla fija del proyecto.
+
+**Pendiente, sin cambios respecto a las intervenciones anteriores:**
+decisión explícita de Samuel sobre el parche del Hallazgo 7 en
+`z180asci.cpp` (ruta real de build:
+`/home/spc/projects/mame-as2k-stable-arm64/src/devices/cpu/z180/z180asci.cpp`).
+Mientras eso no ocurra, las próximas intervenciones horarias deben seguir
+limitándose a comprobar la huella del archivo.
+
+Estado del bloqueo: **SIGUE ABIERTO**. Sin novedad sobre la causa raíz
+(Hallazgo 7, ya confirmado contra el árbol real de compilación); esta
+intervención solo hizo housekeeping del repo, no avanzó el bloqueo en sí.

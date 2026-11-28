@@ -367,3 +367,77 @@ VONTAR ya estaba sincronizado (`HEAD` local = `origin/fix/irq1-ra2-wakeup`
 Sin medición física. Estado del bloqueo: SIGUE ABIERTO, pero con causa raíz
 identificada y no confirmada todavía por una corrida real del parche
 (Hallazgo 7). Próxima intervención: aplicar y probar el parche candidato.
+
+## Nota de sincronización e intento de build (2026-11-28, intervención horaria)
+
+Verificado al inicio: VONTAR (`/mnt/sd/projects/WRITER_INSTRUCTOR/writer-emu`)
+tiene `HEAD` en `75eef5f`, es decir **un commit detrás** de
+`origin/fix/irq1-ra2-wakeup` (`fee577e`, el commit de esta misma
+intervención anterior que documentó el Hallazgo 7). Mismo patrón que en
+intervenciones previas: el commit de documentación se empujó directo a
+GitHub sin pasar por VONTAR. **Pendiente:** la próxima intervención con
+presupuesto de Desktop Commander debe hacer `git -C
+/mnt/sd/projects/WRITER_INSTRUCTOR/writer-emu pull` antes de tocar nada
+más. También hay archivos sin trackear en ese working tree (`cfg/`,
+`error.log`, `snap/`, `tools/__pycache__/`, `tools/dis_driver.py`) --
+`tools/dis_driver.py` en particular parece una herramienta nueva (no
+documentada todavía) que probablemente merezca revisarse y, si es
+reutilizable, commitearse.
+
+Esta intervención intentó localizar `z180asci.cpp` en el árbol de VONTAR
+para poder aplicar y compilar el parche candidato del Hallazgo 7, pero
+**se agotó el presupuesto de 5 llamadas a Desktop Commander durante el
+reconocimiento** (las primeras 3 llamadas se gastaron en búsquedas `find`
+de filesystem completo que fueron lentas). Resultado del reconocimiento,
+antes de agotar el presupuesto:
+
+- Carpeta de diagnóstico confirmada: `/home/spc/projects/WRITER_INSTRUCTOR/diag/`
+  (contiene `writerdiag` de 2026-11-27 08:44, `build.log`, y varias
+  carpetas de sesiones de traza del 2026-11-26/27: `asci1_ab_20261127`,
+  `asci1_handshake_20261127`, `asci1_rx_trace_20261127`,
+  `pic_portb_trace_20261127`, `pic_portb_pc_trace_20261127`,
+  `pic_portb_pc_trace2_20261127` -- todas de la intervención que generó el
+  Hallazgo 6/7, ningún archivo nuevo desde entonces).
+- `build.log` confirma el último build exitoso (2026-11-27 08:44:22,
+  velocidad media 935%, `RUN_EXIT=0`) pero **no contiene** una ruta de
+  fuente (`SRC_DIR`/`mame-as2k`) grepeable con el patrón usado.
+- `find` con profundidad 8 bajo `/mnt/sd/projects/WRITER_INSTRUCTOR` y
+  `/home/spc/projects/WRITER_INSTRUCTOR` **no encontró** `z180asci.cpp`.
+  Es decir, el árbol compartido `mame-as2k-stable-arm64` referenciado en
+  el Hallazgo 7 **no vive bajo ninguna de esas dos rutas** (al menos no a
+  profundidad ≤8), o vive en un punto de montaje/ruta distinto (p. ej.
+  directamente bajo `/mnt/sd/` o `~spc/` sin el prefijo
+  `WRITER_INSTRUCTOR`).
+
+**Ningún archivo de código tocado, ningún build lanzado, ningún comando
+destructivo ejecutado.** Solo lectura/reconocimiento. Esta sección es el
+único cambio de esta intervención (más la nota equivalente en el doc de
+Drive).
+
+**Próxima intervención (orden sugerido para no repetir el desperdicio de
+presupuesto):**
+
+1. `git -C /mnt/sd/projects/WRITER_INSTRUCTOR/writer-emu pull` (resolver
+   el commit de atraso).
+2. Para localizar `z180asci.cpp` sin un `find` global lento: revisar
+   `build_writerdiag.sh` (raíz de `WRITER_INSTRUCTOR`) y/o `build.log`
+   completo (no solo grep del patrón usado hoy) para extraer la ruta
+   exacta del árbol MAME que usa el build; alternativamente
+   `find ~spc -maxdepth 3 -maxdepth 3 -iname "mame-as2k*"` o
+   `find / -maxdepth 3 -iname "mame-as2k*" 2>/dev/null` (profundidad baja,
+   rápido) en vez de profundidad alta bajo rutas ya descartadas.
+3. Una vez localizado: aplicar el parche candidato del Hallazgo 7 a
+   `asext_w()` en la copia usada por el build de `writerdiag` (la propia
+   carpeta de proyecto, no un árbol compartido con otros fines),
+   recompilar (`make -j2 SUBTARGET=writerdiag`, o el script
+   `build_writerdiag.sh`), y verificar con `WRITER_TRACE_PIC_PORTB=1` si
+   RB7 baja a 0 tras `0x046b` y si el bucle de `/RESET` se rompe en un
+   arranque normal sin bypass.
+4. Antes de generalizarlo como cambio de core: grep de
+   `ASEXT_BRK_SEND`/`STATE_BREAK` en otros drivers del árbol MAME que usen
+   `Z180ASCI_CHANNEL` (sigue pendiente, no se hizo esta vez tampoco).
+
+Estado del bloqueo: **SIGUE ABIERTO**, sin cambios respecto a la
+intervención anterior (causa raíz identificada por lectura de código,
+Hallazgo 7, parche candidato redactado pero todavía sin aplicar/compilar/
+probar).

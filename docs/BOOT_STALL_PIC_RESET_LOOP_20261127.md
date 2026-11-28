@@ -653,3 +653,44 @@ Estado del bloqueo: **SIGUE ABIERTO**. Sin novedad sobre la causa raíz
 (Hallazgo 7) ni sobre la decisión pendiente de Samuel; esta intervención
 confirmó que nada cambió y dejó iniciado (sin resultado aún) el chequeo de
 riesgo opcional del paso 3 de "Próximos pasos".
+
+## Intervención 2026-11-28 (horaria, continuación): PID 1510310 confirmado terminado solo; fingerprint sin cambios; sin más análisis posible
+
+Verificado al inicio (VONTAR, `/home/spc/projects/WRITER_INSTRUCTOR/writer-emu`):
+`HEAD` en `b650abc`, árbol limpio, sin divergencia con `origin`.
+
+Huella de `z180asci.cpp` (ambas copias): **idéntica** a la registrada en las
+cuatro intervenciones anteriores -- 20420 bytes, mtime `2026-11-27 06:53`,
+SHA256 `96b23fd1435b26da8af28aa390d48d579c899c7399f24ee6bf18fa51039c1cea`.
+Samuel todavía no ha aplicado el parche del Hallazgo 7 ni ha autorizado
+explícitamente una aplicación automática.
+
+Pendiente #2 de la intervención anterior resuelto: el proceso `PID 1510310`
+(el `grep -rn` de riesgo sobre `src/mame/` que quedó corriendo en segundo
+plano al agotarse el presupuesto) **ya no está vivo** (`ps -p 1510310`
+devuelve "no existe") -- terminó por sí solo sin necesidad de matarlo. No
+se reintentó el grep de riesgo acotado (`git grep`) en esta intervención:
+una subtarea delegada dentro de este mismo proceso de verificación había
+excedido su propio presupuesto de llamadas a Desktop Commander lanzando
+ese mismo grep en segundo plano sin supervisión -- un error de proceso
+interno, ya corregido -- y, detectado eso, esta intervención priorizó
+confirmar que no quedó nada corriendo sin control antes de considerar
+cualquier trabajo adicional. Sin novedad sobre el pendiente #3 original
+(grep de riesgo de `ASEXT_BRK_SEND`/`STATE_BREAK` en otros drivers MAME):
+sigue sin hacerse.
+
+Ningún archivo de código tocado, ningún build lanzado, ningún `edit_block`
+reintentado sobre `z180asci.cpp`. Trabajo físico/hardware sigue pausado,
+sin tocar.
+
+**Pendiente, sin cambios:** decisión explícita de Samuel sobre el parche
+del Hallazgo 7 en `z180asci.cpp` (ruta real de build:
+`/home/spc/projects/mame-as2k-stable-arm64/src/devices/cpu/z180/z180asci.cpp`).
+Mientras eso no ocurra, las próximas intervenciones horarias deben seguir
+limitándose a comprobar la huella del archivo (y, opcionalmente, intentar
+el grep de riesgo acotado con `git grep`, si el árbol lo permite, en vez
+de `grep -r` sobre todo `src/mame/`).
+
+Estado del bloqueo: **SIGUE ABIERTO**. Sin novedad sobre la causa raíz
+(Hallazgo 7); esta intervención fue de verificación y limpieza de proceso,
+no avanzó el bloqueo en sí.

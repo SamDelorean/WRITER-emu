@@ -441,3 +441,72 @@ Estado del bloqueo: **SIGUE ABIERTO**, sin cambios respecto a la
 intervención anterior (causa raíz identificada por lectura de código,
 Hallazgo 7, parche candidato redactado pero todavía sin aplicar/compilar/
 probar).
+
+## Intervención 2026-11-28 (horaria): parche confirmado carácter-por-carácter, aplicación bloqueada por el clasificador de seguridad -- requiere decisión de Samuel
+
+Verificado al inicio: VONTAR seguía un commit atrás (`75eef5f` vs
+`origin` en `ff37870`). Se hizo `git pull` en VONTAR sin incidentes
+(fast-forward limpio); VONTAR queda sincronizado en `ff37870`.
+
+Se localizó el árbol MAME real que usa `build_writerdiag.sh`
+(`SRC=/home/spc/projects/mame-as2k-stable-arm64`, confirmado leyendo el
+script, no por `find` global) y se leyó directamente
+`src/devices/cpu/z180/z180asci.cpp` en esa ruta exacta. El código real de
+`asext_w()`, `device_clock_changed()`, `tdr_w()` y `transmit_edge()`
+coincide carácter por carácter con lo citado en el Hallazgo 7 -- el bug
+queda confirmado por lectura directa de la copia que realmente se
+compila, no solo inferido de una copia distinta. (Nota al margen: existe
+una segunda copia idéntica de ese árbol en `/mnt/sd/projects/mame-as2k-stable-arm64`
+-- `diff` confirma contenido idéntico -- pero `build_writerdiag.sh` usa la
+de `/home/spc/projects/`, que es la que importa.)
+
+**Se intentó aplicar el parche candidato del Hallazgo 7** directamente
+sobre ese archivo vía Desktop Commander (`edit_block`). La acción fue
+**bloqueada por el clasificador de seguridad de la sesión** ("Destructive
+or Unwanted Actions"), porque modifica un archivo fuera de este
+repositorio, en un árbol compartido con otros proyectos hermanos
+(`as2k`/`as2kdiag`/`aspro`, según el propio comentario de
+`build_writerdiag.sh`). Esta intervención, al ser automática y sin
+usuario presente, **no intentó rodear el bloqueo** (p. ej. vía `sed`/
+`python` por `start_process`) -- eso habría sido burlar deliberadamente
+la misma restricción de seguridad bajo otro mecanismo, algo que las
+reglas de esta tarea prohíben explícitamente.
+
+**Resultado: ningún archivo de código fue modificado, ningún build se
+lanzó, `writerdiag` sigue siendo el binario de 2026-11-27 08:44 sin
+cambios.** Huella del archivo sin parchear en VONTAR al momento de esta
+intervención, para detectar si cambia por otra vía:
+`z180asci.cpp`, 20420 bytes, mtime `2026-11-27 06:53` (ambas copias).
+
+### Esto requiere una decisión explícita de Samuel, no de una ejecución automática
+
+El parche en sí está completamente redactado y verificado contra el
+código real (ver Hallazgo 7 arriba). Lo que falta no es análisis: es que
+alguien con permiso explícito lo aplique. Dos caminos, a elección de
+Samuel:
+
+1. **Aplicarlo él mismo**, interactivamente, en VONTAR (o donde prefiera)
+   sobre `/home/spc/projects/mame-as2k-stable-arm64/src/devices/cpu/z180/z180asci.cpp`
+   (y, si quiere mantener la segunda copia en sync, también en
+   `/mnt/sd/projects/mame-as2k-stable-arm64/...`). El diff exacto es el
+   del parche candidato del Hallazgo 7, arriba. Una vez aplicado, la
+   siguiente ejecución horaria puede recompilar (`bash
+   /home/spc/projects/WRITER_INSTRUCTOR/build_writerdiag.sh`, o el mismo
+   comando con `WRITER_TRACE_PIC_PORTB=1 WRITER_TRACE_ASCI1_RX=1
+   WRITER_TRACE_PIC_RAM=1` exportadas) y verificar si RB7 baja a 0 tras
+   `0x046b` y si el bucle de `/RESET` se rompe en un arranque normal.
+2. **Autorizar explícitamente**, en una sesión interactiva con Samuel
+   presente, que una futura ejecución automática aplique este parche
+   específico sobre este archivo específico -- esa autorización puede
+   entonces quedar registrada aquí para que las siguientes ejecuciones
+   horarias no vuelvan a toparse con el mismo bloqueo.
+
+Sin una de las dos, **las próximas ejecuciones horarias no deben volver a
+intentar `edit_block` sobre `z180asci.cpp`** (se bloqueará igual) --
+deben limitarse a comprobar si el archivo cambió (huella de arriba) y,
+si cambió, proceder directo a recompilar y verificar.
+
+Estado del bloqueo: **SIGUE ABIERTO**. Causa raíz confirmada por lectura
+directa del árbol de compilación real; parche listo; aplicación
+pendiente de decisión/acción humana explícita, no de más análisis
+automático.

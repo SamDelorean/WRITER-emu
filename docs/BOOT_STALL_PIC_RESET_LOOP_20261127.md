@@ -510,3 +510,33 @@ Estado del bloqueo: **SIGUE ABIERTO**. Causa raíz confirmada por lectura
 directa del árbol de compilación real; parche listo; aplicación
 pendiente de decisión/acción humana explícita, no de más análisis
 automático.
+
+## Intervención 2026-11-28 (horaria, continuación): sin cambios, sigue pendiente decisión de Samuel
+
+Verificado al inicio: la huella de `z180asci.cpp` (ambas copias,
+`/home/spc/projects/mame-as2k-stable-arm64/...` y
+`/mnt/sd/projects/mame-as2k-stable-arm64/...`) es **idéntica** a la
+registrada en la intervención anterior -- 20420 bytes, mtime
+`2026-11-27 06:53`, SHA256
+`96b23fd1435b26da8af28aa390d48d579c899c7399f24ee6bf18fa51039c1cea`.
+Samuel todavía no ha aplicado el parche del Hallazgo 7.
+
+Conforme a lo que la propia intervención anterior dejó indicado, esta
+ejecución **no reintentó `edit_block`** sobre ese archivo (se bloquearía
+igual por el clasificador de seguridad) y no hizo más análisis nuevo: no
+hay nada más que investigar hasta que el parche se aplique.
+
+Única acción realizada: `git pull` en VONTAR (fast-forward limpio
+`ff37870` → `116f0ea`, sin divergencia). Se usaron 2 de las 5 llamadas a
+Desktop Commander disponibles (huella de archivo + pull); las 3 restantes
+no se usaron, ya que no hay trabajo adicional posible sin el parche.
+
+**Pendiente, sin cambios:** decisión explícita de Samuel -- aplicar él
+mismo el parche candidato del Hallazgo 7 sobre `z180asci.cpp` (ruta real
+de build: `/home/spc/projects/mame-as2k-stable-arm64/src/devices/cpu/z180/z180asci.cpp`),
+o autorizar explícitamente que una ejecución automática futura lo haga.
+Mientras eso no ocurra, las próximas intervenciones horarias deben
+limitarse a comprobar la huella del archivo.
+
+Estado del bloqueo: **SIGUE ABIERTO**, sin novedad desde la intervención
+anterior.

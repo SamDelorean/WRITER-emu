@@ -1,5 +1,12 @@
 > **Nota de este documento:** las "Secciones" referenciadas abajo con numeración (39, 40, 41, 42, 43, 44...) corresponden a la numeración del documento confidencial de Google Drive (WRITER_RE_08), que contiene el detalle técnico completo. Este archivo público resume solo lo necesario para seguimiento, sin RE confidencial.
 
+> **ACTUALIZACIÓN 2026-11-28: RESUELTO.** Ver `docs/HALLAZGO7_PATCH_APPLIED_20261128.md`
+> para el parche aplicado (autorizado por Samuel), el diff exacto y la
+> verificación completa (arranque normal sin bypass, 30s, el PIC ya no
+> reinicia el Z180 más allá del pulso de power-on inicial; 121 escrituras
+> de texto real en el LCD donde antes había 0). La sección final de este
+> documento registra el cierre.
+
 # The Writer: bucle infinito de /RESET del PIC en arranque normal (sin bypass)
 
 **Fecha:** 2026-11-27 (actualizado 2026-11-28). **Fuente:** trazas reales de `writerdiag` (instrumentación
@@ -774,3 +781,29 @@ Estado del bloqueo: **SIGUE ABIERTO**. Sin novedad sobre la causa raíz
 (Hallazgo 7) ni sobre la decisión pendiente de Samuel; esta intervención
 cerró el único pendiente de análisis que quedaba abierto (grep de
 riesgo), sin avanzar el bloqueo principal en sí.
+
+## CIERRE (2026-11-28, sesión interactiva): bloqueo RESUELTO Y VERIFICADO
+
+Samuel autorizó explícitamente, en esta misma sesión, aplicar el parche del
+Hallazgo 7 sobre `z180asci.cpp` (ruta de build en VONTAR:
+`/home/spc/projects/mame-as2k-stable-arm64/src/devices/cpu/z180/z180asci.cpp`,
+y su misma ruta reflejada en `/mnt/sd/...` -- confirmado mismo inodo, no
+una copia separada como se creía). Diff exacto, huella antes/después y
+verificación completa en `docs/HALLAZGO7_PATCH_APPLIED_20261128.md`.
+
+Resumen de la verificación: arranque normal, sin ningún bypass de
+diagnóstico, 30s emulados. Antes del parche: `/RESET` cada ~2.016s
+indefinidamente, 0 escrituras de texto real (`rs=1`). Después del parche:
+**1 solo** pulso de `/RESET` (el de power-on inicial) en toda la corrida,
+el PIC nunca vuelve a reiniciar el Z180, y **121** escrituras `rs=1` con
+texto real y legible en el LCD (`"MEMORY ERROR WARNING!!!"`, un mensaje de
+autodiagnóstico propio del firmware, esperable sin estado previo de
+NVRAM/SRAM -- no es un bug nuevo).
+
+**Estado del bloqueo: RESUELTO.** Las próximas ejecuciones horarias de esta
+tarea programada ya no necesitan repetir verificación de huella ni
+reintentar nada sobre `z180asci.cpp`: pueden cerrarse sin acción, salvo que
+Samuel pida continuar con el siguiente nivel (p. ej. investigar el mensaje
+`"MEMORY ERROR WARNING!!!"`, o el riesgo de generalización del parche a
+otros drivers de MAME, ambos documentados como pendientes no bloqueantes
+en `docs/HALLAZGO7_PATCH_APPLIED_20261128.md`).

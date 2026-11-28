@@ -1,7 +1,6 @@
 *.bin
 *.rom
 roms/
-docs/
 
 # runtime artifacts from running writerdiag/writer (regenerated each run)
 cfg/

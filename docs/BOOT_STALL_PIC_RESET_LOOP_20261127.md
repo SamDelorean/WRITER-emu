@@ -694,3 +694,83 @@ de `grep -r` sobre todo `src/mame/`).
 Estado del bloqueo: **SIGUE ABIERTO**. Sin novedad sobre la causa raíz
 (Hallazgo 7); esta intervención fue de verificación y limpieza de proceso,
 no avanzó el bloqueo en sí.
+
+## Intervención 2026-11-28 (horaria, continuación): pendiente #3 de "Próximos pasos" resuelto (grep de riesgo acotado con `git grep`); fingerprint sin cambios
+
+Verificado al inicio (VONTAR, `/home/spc/projects/WRITER_INSTRUCTOR/writer-emu`):
+el working tree estaba 4 commits detrás de `origin/fix/irq1-ra2-wakeup`
+(`b650abc..d82a6fb`, los commits de housekeeping y de cierre del chequeo de
+proceso de las dos intervenciones anteriores). Se hizo `git pull` -- árbol
+de trabajo limpio, sin divergencia.
+
+Huella de `z180asci.cpp` (ambas copias,
+`/home/spc/projects/mame-as2k-stable-arm64/...` y
+`/mnt/sd/projects/mame-as2k-stable-arm64/...`): **idéntica** a todas las
+intervenciones anteriores -- 20420 bytes, mtime `2026-11-27 06:53`, SHA256
+`96b23fd1435b26da8af28aa390d48d579c899c7399f24ee6bf18fa51039c1cea`. Samuel
+todavía no ha aplicado el parche del Hallazgo 7 ni ha autorizado
+explícitamente una aplicación automática. Se revisó también el doc de Drive
+completo (secciones 1-50) buscando cualquier nota manual de Samuel -- no se
+encontró ninguna nueva.
+
+Con el bloqueo principal sin movimiento posible, se completó el pendiente
+#3 de "Próximos pasos" (riesgo de generalizar el parche del Hallazgo 7 como
+cambio de core: ¿dependen otros drivers de MAME del comportamiento actual
+de `BRK_SEND`/`STATE_BREAK`?), usando `git grep` acotado (mucho más rápido
+que el `grep -r` sobre archivos no indexados de intervenciones previas, que
+había quedado sin resultado dentro del presupuesto):
+
+1. **`git grep -E -n "ASEXT_BRK_SEND|STATE_BREAK" -- src/mame`: 0
+   resultados.** Ningún driver en `src/mame/` referencia estos símbolos
+   por nombre -- son privados a la implementación de `z180asci.cpp`
+   (`src/devices/cpu/z180/`), no se exponen a los drivers que instancian
+   el Z180.
+2. **`git grep -i -l "z180_device" -- src/mame`: 14 drivers** instancian
+   la clase `z180_device` (y por tanto el core ASCI compartido que
+   contiene el bug del Hallazgo 7), aunque ninguno referencia los símbolos
+   internos directamente:
+   `amstrad/pda600.cpp`, `citoh/cit101xl.cpp`, `conitec/prof180x.cpp`,
+   `misc/chsuper.cpp`, `misc/ecoinf3.cpp`, `misc/luckybal.cpp`,
+   `namco/20pacgal.cpp` (+ `.h`), `roland/roland_mc50.cpp`,
+   `roland/roland_pr100.cpp`, `sfrj/tim011.cpp`, `skeleton/cd100.cpp`,
+   `skeleton/sb180.cpp`, `taito/asuka.cpp`.
+
+**Lectura del riesgo:** como el bug vive dentro de `transmit_edge()` del
+core ASCI compartido y no en una API expuesta a los drivers, el cambio
+candidato del Hallazgo 7 (corregir `output_txa()` en `STATE_BREAK`) es
+estructuralmente un cambio de comportamiento del core, no de un símbolo
+que algún driver llame explícitamente. Ninguno de los 14 drivers puede
+estar dependiendo de ese bug *por nombre*, pero cualquiera de ellos que
+genere o dependa de una condición de BREAK serial por ASCI (poco común,
+pero no descartable sin revisar cada uno) podría ver un cambio de
+comportamiento si el parche se aplica. No se revisó el código de los 14
+drivers uno por uno (fuera del alcance del presupuesto de esta
+intervención); queda como verificación opcional de bajo riesgo antes de
+upstreamear el parche a MAME, no como bloqueante para aplicarlo
+localmente en el árbol de build de `writerdiag`.
+
+De paso: también se intentó localizar el driver `writer`/`aspro`/`as2k`
+dentro de `src/mame/misc/` para usarlo de referencia de sintaxis de
+instanciación del Z180 -- no se encontró ningún archivo con esos nombres
+en ese árbol (`src/mame/misc/writer.cpp`, `aspro.cpp`, `as2k*.cpp`
+inexistentes), lo cual confirma que el driver real de este proyecto vive
+fuera del árbol estándar `src/mame/` de esta copia de MAME (consistente
+con lo ya sabido: `writer.cpp` se compila como parte del binario
+`writerdiag` en una ruta de proyecto separada, no como un driver más de
+`src/mame/`).
+
+Ningún archivo de código tocado, ningún build lanzado, ningún
+`edit_block` reintentado sobre `z180asci.cpp`. Trabajo físico/hardware
+sigue pausado, sin tocar.
+
+**Pendiente, sin cambios:** decisión explícita de Samuel sobre el parche
+del Hallazgo 7 en `z180asci.cpp` (ruta real de build:
+`/home/spc/projects/mame-as2k-stable-arm64/src/devices/cpu/z180/z180asci.cpp`).
+Es el único bloqueante real; el pendiente #3 (riesgo de generalización)
+queda resuelto con esta intervención y no requiere más seguimiento salvo
+que Samuel pida revisar los 14 drivers listados antes de un upstream.
+
+Estado del bloqueo: **SIGUE ABIERTO**. Sin novedad sobre la causa raíz
+(Hallazgo 7) ni sobre la decisión pendiente de Samuel; esta intervención
+cerró el único pendiente de análisis que quedaba abierto (grep de
+riesgo), sin avanzar el bloqueo principal en sí.

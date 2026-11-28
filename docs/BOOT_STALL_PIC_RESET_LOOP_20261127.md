@@ -2,7 +2,7 @@
 
 # The Writer: bucle infinito de /RESET del PIC en arranque normal (sin bypass)
 
-**Fecha:** 2026-11-27. **Fuente:** trazas reales de `writerdiag` (instrumentación
+**Fecha:** 2026-11-27 (actualizado 2026-11-28). **Fuente:** trazas reales de `writerdiag` (instrumentación
 existente `PIC RA1=... -> Z180 /RESET ASSERT/CLEAR`, ya presente en writer.cpp),
 corridas en VONTAR. No es inferencia: son eventos reales logueados por la
 emulación del PIC real (pic16c54_device ejecutando el dump físico de U11).
@@ -63,33 +63,10 @@ de un pulso RA2 del PIC. Es decir, hay una dependencia circular entre ambos
 lados del sistema cuyos tiempos relativos exactos (quién pulsa qué y cuándo,
 en microsegundos reales) no están medidos físicamente todavía.
 
-## Hipótesis actualizadas (ninguna confirmada por medición física)
-
-1. ~~Comportamiento esperado para SRAM en frío.~~ **DESCARTADA** (Hallazgo 2).
-2. **Carrera de tiempos PIC/Z180** (Hallazgo 3): el periodo de reintento del
-   PIC es más corto que el tiempo real que el Z180 necesita para completar
-   su primer ciclo hasta HALT/SLP. Candidato más fuerte actualmente.
-3. ~~Una condición de handshake por el enlace serial PIC<->Z180 (bit-bang,
-   baud rate/polaridad) que nunca se satisface.~~ **Descartada como causa de
-   la carrera de tiempos** (Hallazgo 4: corregir el baudrate ASCI1 no cambia
-   el tiempo-a-SLP ni el bloqueo). El baud rate/polaridad exacto del enlace
-   bit-bang sigue sin medición física y puede importar para otros fines, pero
-   no es la causa del bloqueo de arranque.
-4. ~~Wait-states de memoria/I/O emulados de más (DCNTL=0xF0, máximo) en el
-   fetch normal de opcodes.~~ **DESCARTADA** (Hallazgo 5, Sección 44): esas
-   funciones solo se invocan desde las rutinas de DMA y desde `burn_cycles()`,
-   nunca desde el bucle normal de `execute_run()`.
-
-**Tras los Hallazgos 4 y 5, la hipótesis 2 (carrera de tiempos PIC/Z180) queda
-como la única explicación viable del bloqueo, aún pendiente de resolución.**
-Cerrarla requeriría cambiar la relación real entre el periodo de reintento
-del PIC y el tiempo que tarda el Z180 en llegar a SLP -- ninguno de los dos
-es, hasta ahora, algo que se haya identificado como corregible por software
-sin evidencia adicional (ver Sección 34 del doc confidencial: el modelo de
-reloj del PIC ya es fiel al hardware real). Sin medición física del hardware
-real (pospuesta por el usuario), no hay forma de distinguir si este
-comportamiento es el del hardware real (en cuyo caso no habría "bug" que
-corregir) o un parámetro de modelado aún no identificado.
+**Actualización 2026-11-28 (ver Hallazgo 6): esta "carrera de tiempos" queda
+reinterpretada. No es un simple margen insuficiente: es un mutual-wait
+(Hallazgo 5 más abajo) causado, a su vez, por un bug concreto y localizado en
+el core Z180 ASCI de MAME (Hallazgo 6), identificable sin medición física.**
 
 ## Hallazgo 4 (2026-11-27): la corrección ASCI1 full-PHI NO resuelve el bloqueo
 
@@ -158,27 +135,219 @@ active DMA o invoque `burn_cycles()` durante esos ~2.79s -- no verificado,
 pero sin evidencia de uso de DMA en el arranque hasta ahora. Detalle
 completo en la Sección 44 del doc confidencial de Drive.
 
-## Próximos pasos posibles (sin medición física)
+## Hallazgo 6 (2026-11-27/28): mutual-wait confirmado entre PIC y Z180 en el handshake TXA1/RXA1
 
-- Medir con mayor precisión, vía logs ya existentes, el momento exacto
-  (dentro del ciclo del PIC) en que se hace el pulso RA2 y la comprobación
-  de PORTB, para confirmar si el margen real es de ~0.77s de déficit
-  (2.79s necesarios vs ~2.016s disponibles) o si hay otro factor.
-- Revisar si el periodo de reintento del PIC (los contadores de
-  `PIC16C54C_U11_ANALYSIS.md` sec.2, down-counter en RAM `0x0F` para RB7,
-  contador adicional en RAM `0x0E` para TMR0) está modelado con el prescaler
-  y reloj correctos (32.768kHz, confirmado en Sección 34) -- si el conteo de
-  iteraciones real en el firmware del PIC no coincide con el medido, el
-  periodo de ~2.016s podría estar mal calculado en vez de ser un bug de
-  carrera genuino del diseño original.
-- Identificar los call-sites de `burn_cycles()` para cerrar del todo la
-  posibilidad de DCNTL (Hallazgo 5).
-- Medición física (pendiente, pospuesta): el periodo real del PIC en el
-  hardware real podría no coincidir exactamente con el modelo actual si hay
-  algún parámetro no capturado en el desensamblado (p.ej. un NOP de
-  temporización, un WDT reset intermedio, etc.).
+Instrumentación `WRITER_TRACE_PIC_PORTB` + `WRITER_TRACE_ASCI1_RX` (4s
+emulados, arranque normal sin bypass): 207 lecturas del PIC en su PC de
+espera (`0x0B0`) devuelven siempre `PORTB=0x86` (RB7=1, TXA1 alto). El PIC
+jamás toma la rama de transmisión de sus 4 bytes (`0x0B4-0x0BB`) porque esa
+rama sólo se toma cuando RB7 (=TXA1) está en bajo.
 
-## Nota de sincronización (2026-11-27, esta intervención)
+Auditoría completa del desensamblado ROM (10,033 líneas Ghidra): **no existe
+ninguna instrucción `OUT0 (0x08),r`** (escritura a TDR1, el registro de
+datos de transmisión ASCI1) en todo el firmware analizado. El Z180 nunca
+transmite un byte de datos normal por TXA1. En paralelo, el Z180 configura
+ASCI1 (CNTLB1=0x06, CNTLA1=0x64 con RE=1/TE=1) y entra en un bucle de
+espera de recepción (`ram:062f`, lectura de STAT1/RDR1) sin enviar nada
+primero.
+
+Resultado: **mutual-wait real, confirmado por trazas, no solo hipotético**:
+1. El PIC espera TXA1 (RB7) en bajo antes de transmitir sus 4 bytes.
+2. El Z180 espera datos del PIC por RXA1 y nunca inicia una transmisión
+   TXA1 vía TDR1.
+3. TXA1 se queda alto indefinidamente; el PIC nunca sale de su bucle de
+   espera, agota su contador de reintento y reinicia el Z180.
+
+El tap `WRITER_TRACE_PIC_RAM` (RAM 0x08-0x0C del PIC) confirma además que,
+en consecuencia, **el PIC nunca llega a transmitir ningún byte** en ningún
+momento del arranque normal observado.
+
+Detalle completo, incluyendo auditoría de todas las instrucciones `OUT`/
+`OUT (C)` del firmware y la comprobación de dirección TRISB del PIC, en
+`docs/PIC_Z180_TXA1_MUTUAL_WAIT_20261127.md` y
+`docs/PIC_TX_PAYLOAD_BYTES_20261127.md` (este repositorio, commit `75eef5f`).
+
+## Hallazgo 7 (2026-11-28): CAUSA RAÍZ IDENTIFICADA — bug concreto en el core Z180 ASCI de MAME, verificable por código, SIN medición física
+
+El Hallazgo 6 dejaba abierta una pregunta: ¿por qué TXA1 nunca baja, si el
+protocolo del firmware tiene un mecanismo explícito para forzarlo? La
+respuesta se encontró leyendo directamente `z180asci.cpp` (árbol compartido
+`mame-as2k-stable-arm64/src/devices/cpu/z180/`), sin necesidad de tocar
+hardware real.
+
+### El firmware SÍ tiene un mecanismo para bajar TXA1: el bit BRK_SEND de ASEXT1
+
+El Z180 tiene un registro `ASEXT1` (puerto `0x13`) con un bit `BRK_SEND`
+(forzar condición de "break", TXA1 en bajo continuo, independiente de
+cualquier dato en TDR1 -- mecanismo estándar Zilog, no requiere haber
+transmitido nunca un byte normal). El audit previo (Hallazgo 6 /
+`PIC_Z180_TXA1_MUTUAL_WAIT_20261127.md`) ya había localizado que la rutina
+de arranque Z180 llama a `0x046b` (que escribe ASEXT1 con `AND 0xFC OR
+0x05`, es decir: `BRK_EN=1` y `BRK_SEND=1`) inmediatamente después de
+configurar ASCI1 y antes de entrar al bucle de espera de recepción
+(`ram:062f`). Es decir: **el firmware sí intenta poner TXA1 en bajo antes de
+esperar datos del PIC.** Esto no se había investigado hasta ahora porque el
+audit previo sólo confirmó "no es un TDR1 write" sin preguntar qué hace
+realmente ASEXT1.
+
+### El bug: el estado BREAK se fija lógicamente pero nunca se refleja en el pin físico
+
+Código relevante de `z180asci.cpp` (rutas confirmadas por lectura directa):
+
+```cpp
+void z180asci_channel_base::asext_w(uint8_t data)
+{
+    if (m_asci_ext & Z180_ASEXT_BRK_EN)
+        m_tx_state = (m_asci_ext & Z180_ASEXT_BRK_SEND) ? STATE_BREAK : STATE_WAIT;
+    device_clock_changed();   // <- cancela el timer de transmisión (ver abajo)
+}
+
+void z180asci_channel_base::device_clock_changed()
+{
+    ...
+    m_tra_clock->adjust(attotime::never);   // <- el timer de TX queda SIEMPRE detenido aquí
+    ...
+    if (!m_sample_rate.is_never())
+        m_rcv_clock->adjust(m_sample_rate, 0, m_sample_rate);  // sólo se rearma el de RX
+}
+
+void z180asci_channel_base::transmit_edge()   // única función que llama output_txa() para STATE_BREAK
+{
+    if (m_asci_cntla & Z180_CNTLA_TE)
+    {
+        switch (m_tx_state)
+        {
+        case STATE_DATA:  output_txa(BIT(m_tsr, 0)); ...
+        case STATE_WAIT:  ...
+        case STATE_BREAK: output_txa(0); break;   // <- esto es lo único que pondría TXA1 en bajo
+        }
+    }
+}
+
+void z180asci_channel_base::tdr_w(uint8_t data)   // ÚNICO lugar que rearma m_tra_clock
+{
+    ...
+    if (!m_bit_rate.is_never())
+        m_tra_clock->adjust(m_bit_rate, 0, m_bit_rate);
+}
+```
+
+`transmit_edge()` (la única función que ejecuta `output_txa(0)` para
+`STATE_BREAK`) sólo se invoca periódicamente desde el timer `m_tra_clock`
+(hay también una ruta alternativa vía reloj externo `cka_wr()`, pero el
+canal 1 fuerza `CKA1D=1` -- reloj externo deshabilitado -- y de todas formas
+no hay ninguna señal física de reloj externo cableada a CKA1 en este
+hardware). `m_tra_clock` **sólo se arma en `tdr_w()`**, es decir, sólo
+cuando el firmware escribe un byte de datos real en TDR1.
+
+Pero el Hallazgo 6 ya demostró, por auditoría exhaustiva del desensamblado,
+que **el firmware nunca ejecuta `OUT0 (0x08),r` (TDR1)**. Por tanto
+`m_tra_clock` nunca se arma, `transmit_edge()` nunca se ejecuta por esa vía,
+y cuando el firmware escribe ASEXT1 con `BRK_SEND=1` (en `0x046b`), la
+llamada a `asext_w()` SÍ fija `m_tx_state = STATE_BREAK` correctamente,
+pero inmediatamente después `device_clock_changed()` **cancela
+explícitamente** el único timer que podría ejecutar `output_txa(0)`. El
+resultado: `m_asci_ext` (legible por software) refleja `BRK_SEND=1`
+correctamente, pero el pin físico `TXA1` **nunca cambia**, porque
+`output_txa()` nunca vuelve a ejecutarse para ese canal.
+
+Se confirmó además (lectura de `writer.cpp`) que el cableado del callback
+es correcto: `output_txa()` → `m_txa_handler` → `writer_state::z180_txa1_w()`
+→ `m_z180_txa1` → bit `0x80` (RB7) leído por `pic_portb_r()`. Si
+`output_txa(0)` se ejecutara, el PIC lo vería correctamente. El problema
+está enteramente en que esa llamada nunca ocurre.
+
+### Por qué esto NO es (sólo) una carrera de tiempos
+
+Esto reemplaza la lectura del Hallazgo 3: no es que el Z180 tarde "demasiado"
+en cumplir su parte del protocolo -- **el Z180 emulado es estructuralmente
+incapaz de cumplir su parte del protocolo de break tal como está implementado
+el core ASCI de MAME**, sin importar cuánto tiempo se le dé. El PIC puede
+esperar para siempre: TXA1 nunca bajará. La condición de carrera real
+(Hallazgo 3) sigue siendo un fenómeno observable (el PIC se rinde en ~2.016s
+contra un presupuesto de ~2.79s), pero es secundaria: aunque el PIC tuviera
+un timeout infinito, el arranque normal igual se quedaría colgado para
+siempre con el modelo actual, porque el break nunca se refleja en el pin.
+
+### Parche candidato (NO aplicado todavía -- pendiente de build+test)
+
+En `asext_w()`, reflejar el cambio de estado de break inmediatamente en el
+pin físico, en vez de depender exclusivamente del timer de transmisión de
+datos (que es semánticamente una señal distinta: bit-clock de datos, no
+"forzar nivel de línea"). Algo equivalente a:
+
+```cpp
+void z180asci_channel_base::asext_w(uint8_t data)
+{
+    if (m_asci_ext & Z180_ASEXT_BRK_EN)
+    {
+        m_tx_state = (m_asci_ext & Z180_ASEXT_BRK_SEND) ? STATE_BREAK : STATE_WAIT;
+        if (m_tx_state == STATE_BREAK)
+            output_txa(0);
+        else if (m_asci_stat & Z180_STAT_TDRE)   // sólo si no hay transmisión de datos en curso
+            output_txa(1);
+    }
+    device_clock_changed();
+}
+```
+
+Esto modela el comportamiento real del Z8018x: BRK_SEND fuerza la línea de
+forma inmediata y asíncrona (no depende del baud-rate generator ni de haber
+cargado antes un byte en TDR1), consistente con el uso de "break" como señal
+de protocolo fuera de banda, que es exactamente para lo que este firmware
+lo está usando.
+
+**No se modificó ningún archivo de código en esta intervención.** El cambio
+propuesto es en `mame-as2k-stable-arm64/src/devices/cpu/z180/z180asci.cpp`
+(árbol compartido, fuera de este repositorio público) y requiere
+recompilar `writerdiag` y verificar con `WRITER_TRACE_PIC_PORTB=1` que RB7
+baja a 0 tras `0x046b`, antes de aplicarlo como comportamiento por defecto.
+
+## Hipótesis actualizadas (estado al 2026-11-28)
+
+1. ~~Comportamiento esperado para SRAM en frío.~~ **DESCARTADA** (Hallazgo 2).
+2. ~~Carrera de tiempos PIC/Z180 pura (el Z180 simplemente tarda más de lo
+   que el PIC espera).~~ **SUPERADA/REFINADA por el Hallazgo 7**: el Z180
+   nunca podría ganar esa carrera con el modelo actual, independientemente
+   del tiempo disponible, porque el mecanismo de break que debería bajar
+   TXA1 está roto en el core ASCI de MAME.
+3. ~~Una condición de handshake por el enlace serial PIC<->Z180 (bit-bang,
+   baud rate/polaridad) que nunca se satisface.~~ **Descartada como causa
+   de la carrera de tiempos** (Hallazgo 4). El baud rate/polaridad exacto
+   del enlace bit-bang sigue sin medición física pero no es la causa del
+   bloqueo de arranque.
+4. ~~Wait-states de memoria/I/O emulados de más (DCNTL=0xF0, máximo) en el
+   fetch normal de opcodes.~~ **DESCARTADA** (Hallazgo 5).
+5. **Mutual-wait TXA1/RXA1 entre PIC y Z180** (Hallazgo 6): confirmado por
+   trazas reales, no sólo inferido.
+6. **Causa raíz del mutual-wait: bug en `z180asci.cpp` (core MAME, no
+   firmware)** -- `STATE_BREAK` nunca ejecuta `output_txa(0)` porque el
+   único disparador de `transmit_edge()` (el timer `m_tra_clock`) sólo se
+   arma en `tdr_w()`, y el firmware de este producto nunca escribe TDR1.
+   **Esta es, a la fecha, la hipótesis más fuerte, fundamentada en lectura
+   directa de código fuente (no inferencia ni medición física), y es
+   corregible por software.**
+
+## Próximos pasos posibles
+
+1. Aplicar el parche candidato del Hallazgo 7 a `z180asci.cpp` en una rama
+   de pruebas del árbol compartido `mame-as2k-stable-arm64` (fuera de este
+   repo), recompilar `writerdiag` (`make -j2 SUBTARGET=writerdiag`) y
+   verificar con `WRITER_TRACE_PIC_PORTB=1` que RB7 baja a 0 después de que
+   el Z180 ejecuta `0x046b`.
+2. Si RB7 baja correctamente, verificar si el PIC progresa a su rama de
+   transmisión (`0x0B4-0x0BB`) y si el bucle de `/RESET` finalmente se
+   rompe en una corrida de arranque normal (sin ningún `WRITER_TEST_*`
+   bypass).
+3. Confirmar que el parche no rompe ningún otro driver de MAME que use
+   `Z180ASCI_CHANNEL` con break (buscar otros usos de `ASEXT_BRK_SEND` en
+   el árbol de MAME antes de proponerlo como cambio general del core).
+4. Mantener pendiente, como antes, la medición física del periodo real de
+   reintento del PIC y del enlace bit-bang RB0→RXA1 -- pausada por el
+   usuario, y en principio ya no necesaria para cerrar ESTE bloqueo si el
+   parche de break confirma la causa raíz.
+
+## Nota de sincronización (2026-11-27, intervención anterior)
 
 El repo en VONTAR tiene su rama `fix/irq1-ra2-wakeup` en el commit local
 `0fa0944` (de Samuel, 2026-11-27 09:42), que **no se ha sincronizado** con
@@ -191,4 +360,10 @@ próxima intervención con acceso a VONTAR debe hacer `git fetch && git merge
 origin/fix/irq1-ra2-wakeup` (o equivalente) antes de continuar, igual que
 se hizo antes con `cda102c`.
 
-Sin medición física. Estado del bloqueo: SIGUE ABIERTO.
+**Actualización 2026-11-28:** verificado al inicio de esta intervención que
+VONTAR ya estaba sincronizado (`HEAD` local = `origin/fix/irq1-ra2-wakeup`
+= `75eef5f`, sin divergencia). La nota anterior queda resuelta.
+
+Sin medición física. Estado del bloqueo: SIGUE ABIERTO, pero con causa raíz
+identificada y no confirmada todavía por una corrida real del parche
+(Hallazgo 7). Próxima intervención: aplicar y probar el parche candidato.

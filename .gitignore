@@ -2,3 +2,10 @@
 *.rom
 roms/
 docs/
+
+# runtime artifacts from running writerdiag/writer (regenerated each run)
+cfg/
+snap/
+error.log
+__pycache__/
+*.pyc
